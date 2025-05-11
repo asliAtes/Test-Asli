@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "strict": false,
+    "noImplicitAny": false,
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "skipLibCheck": true,
+    "baseUrl": ".", 
+    "paths": {
+      "@data": ["test-data.ts"]
+    }
+  },
+  "include": ["tests/**/*.ts", "test-data.ts"]
+}

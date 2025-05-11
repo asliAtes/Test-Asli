@@ -1,0 +1,93 @@
+"Issue Type","Summary","Test Type","Gherkin"
+"Test","Send RCS message to RCS-capable device","Functional","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data with carrier ""INFOBIP_RCS"" for an RCS-capable device
+When I submit the RCS failover message to the communication module
+Then the RCS failover response should indicate delivery through ""RCS"""
+"Test","Send RCS message to non-RCS-capable device with failover","Functional","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data with carrier ""INFOBIP_RCS"" for a non-RCS-capable device
+When I submit the RCS failover message to the communication module
+Then the RCS failover response should indicate failover to ""SMS"""
+"Test","Send SMS message using INFOBIP_SMS carrier","Functional","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data with carrier ""INFOBIP_SMS"" for any device
+When I submit the RCS failover message to the communication module
+Then the RCS failover response should indicate delivery through ""SMS"""
+"Test","T-Mobile customer message routing via BNE","Functional","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data for a T-Mobile customer
+When I submit the RCS failover message to the communication module
+Then the RCS failover response should indicate delivery through ""BNE"""
+"Test","Message with unknown parameter rejection","Negative","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data with an unknown parameter ""fooBar""
+When I submit the RCS failover message to the communication module
+Then the RCS failover response should indicate ""Invalid field in request: 'fooBar' is not allowed."""
+"Test","RCS message to non-RCS device failover to SMS","Functional","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data for scenario ""TC02"" (non-RCS device)
+When I submit the RCS failover message to the communication module
+Then the RCS failover response should indicate failover to ""SMS"""
+"Test","RCS message with long content","Functional","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data for scenario ""TC03"" (long content)
+When I submit the RCS failover message to the communication module
+Then the RCS failover response should indicate delivery through ""RCS"""
+"Test","RCS message with special characters","Functional","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data for scenario ""TC04"" (special characters)
+When I submit the RCS failover message to the communication module
+Then the RCS failover response should indicate delivery through ""RCS"""
+"Test","RCS scheduled message","Functional","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data for scenario ""TC05"" (scheduled)
+When I submit the RCS failover message to the communication module
+Then the RCS failover response should indicate delivery through ""RCS"""
+"Test","Multiple RCS recipients with mixed device capabilities","Functional","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data for scenario ""TC06"" (mixed capabilities)
+When I submit the RCS failover message to the communication module
+Then the RCS failover response should indicate mixed delivery: some ""RCS"", some failover to ""SMS"""
+"Test","Empty message content for RCS","Negative","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data for scenario ""TC07"" (empty content)
+When I submit the RCS failover message to the communication module
+Then the RCS failover response should indicate ""empty message body"""
+"Test","Invalid phone number format for RCS","Negative","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data for scenario ""TC08"" (invalid phone number)
+When I submit the RCS failover message to the communication module
+Then the RCS failover response should indicate ""400 Bad Request"""
+"Test","Missing required field in RCS request","Negative","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data for scenario ""TC09"" (missing field)
+When I submit the RCS failover message to the communication module
+Then the RCS failover response should indicate ""400 Bad Request"""
+"Test","RCS message with HTML content","Functional","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data for scenario ""TC10"" (HTML content)
+When I submit the RCS failover message to the communication module
+Then the RCS failover response should indicate delivery through ""RCS"""
+"Test","Network timeout handling for RCS","Negative","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data for scenario ""TC11"" (network timeout)
+When I submit the RCS failover message with a short timeout
+Then the RCS failover response should indicate appropriate error handling"
+"Test","Large batch of RCS messages","Performance","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data for scenario ""TC12"" (large batch)
+When I submit the RCS failover message to the communication module
+Then the RCS failover response should indicate all recipients processed correctly"
+"Test","Malformed RCS payload","Negative","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data for scenario ""TC13"" (malformed payload)
+When I submit the malformed RCS failover message to the communication module
+Then the RCS failover response should indicate ""400 Bad Request"""
+"Test","Extreme character limit for RCS","Functional","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data for scenario ""TC14"" (extreme character limit)
+When I submit the RCS failover message to the communication module
+Then the RCS failover response should indicate appropriate handling"
+"Test","RCS with rapid sequential messages","Performance","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data for scenario ""TC15"" (rapid sequential)
+When I submit multiple RCS failover messages in rapid succession
+Then the RCS failover response should indicate all messages processed correctly"
+"Test","RCS with phone number missing country code","Negative","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data for scenario ""TC16"" (missing country code)
+When I submit the RCS failover message to the communication module
+Then the RCS failover response should indicate ""Invalid E.164 phone number format"""
+"Test","RCS with invalid numeric phone number","Negative","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data for scenario ""TC17"" (invalid numeric)
+When I submit the RCS failover message to the communication module
+Then the RCS failover response should indicate ""Invalid E.164 phone number format"""
+"Test","RCS with phone number containing invalid characters","Negative","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data for scenario ""TC18"" (invalid characters)
+When I submit the RCS failover message to the communication module
+Then the RCS failover response should indicate ""Invalid E.164 phone number format"""
+"Test","RCS failover verification with specific test number","Functional","Given the RCS/SMS communication module is deployed and accessible
+Given I prepare RCS failover test data for scenario ""TC22"" (specific test number)
+When I submit the RCS failover message to the communication module
+Then the RCS failover response should indicate failover to ""SMS""" 

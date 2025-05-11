@@ -1,0 +1,30 @@
+@DEV-976
+Feature: DEV-976 Switch USCC Staging from HTTP to HTTPS
+  As a developer or QA
+  I want the USCC Staging Communication Module to be accessible only via HTTPS
+  So that all integrations are secure and compliant with Infobip and browser requirements
+
+  Background:
+    Given the USCC Staging environment is deployed at "https://uscc-stg.kredosai.com"
+
+  Scenario: HTTPS endpoint is accessible
+    When I send a GET request to "https://uscc-stg.kredosai.com/health"
+    Then the DEV-976 response should have status code 200
+    And the certificate should be valid and trusted
+
+  Scenario: HTTP endpoint is rejected or redirected
+    When I send a GET request to "http://uscc-stg.kredosai.com/health"
+    Then the response should have status code 301 or 403 or 404
+    And the response should not contain sensitive information
+
+  Scenario: Successful API call over HTTPS
+    Given I have a valid API payload for the Communication Module
+    When I POST the payload to "https://uscc-stg.kredosai.com/app4/kredos/comm/messaging"
+    Then the DEV-976 response should have status code 200
+    And the message should be accepted
+
+  Scenario: SSO login via Keycloak over HTTPS
+    When I navigate to "https://uscc-stg.kredosai.com/auth/realms/KredosUserMgmt/protocol/openid-connect/auth"
+    Then the login page should load without mixed content warnings
+    And the certificate should be valid
+    And the login flow should not fail due to redirect_uri or insecure context 

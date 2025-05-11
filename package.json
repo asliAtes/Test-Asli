@@ -1,0 +1,39 @@
+{
+  "name": "communication-module-tests",
+  "version": "1.0.0",
+  "description": "Automated tests for the Communication Module",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node test-runner.js all",
+    "test:email": "node test-runner.js email",
+    "test:rcs": "node test-runner.js rcs",
+    "test:sms": "node test-runner.js sms",
+    "test:customer": "node test-runner.js customer",
+    "test:infobip:test-mode": "node test-runner.js test-mode",
+    "test:sms-flag": "node test-runner.js sms-flag",
+    "test:infobip": "node test-runner.js infobip"
+  },
+  "dependencies": {
+    "@cucumber/cucumber": "^10.3.1",
+    "@cucumber/gherkin": "^32.1.0",
+    "axios": "^1.9.0",
+    "csv-parse": "^5.6.0",
+    "dotenv": "^16.5.0",
+    "form-data": "^4.0.2",
+    "ssh2-sftp-client": "^12.0.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.2.2"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-cloudwatch-logs": "^3.804.0",
+    "@aws-sdk/client-lambda": "^3.804.0",
+    "@types/aws-sdk": "^0.0.42",
+    "@types/chai": "^5.2.2",
+    "@types/mongodb": "^4.0.6",
+    "@types/pg": "^8.15.1",
+    "aws-sdk": "^2.1692.0",
+    "chai": "^5.2.0",
+    "mongodb": "^6.16.0",
+    "pg": "^8.15.6"
+  }
+}

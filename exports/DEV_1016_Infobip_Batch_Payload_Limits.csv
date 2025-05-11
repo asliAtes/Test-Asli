@@ -1,0 +1,32 @@
+"Issue Type","Summary","Test Type","Gherkin"
+"Test","Batch size at maximum limit","Functional","Given the Communication Module is integrated with Infobip Messages API
+Given I prepare a batch of 100 SMS messages for Infobip
+When I submit the batch to the Communication Module
+Then the request should be accepted by Infobip
+And no splitting should occur"
+"Test","Batch size exceeds maximum limit","Functional","Given the Communication Module is integrated with Infobip Messages API
+Given I prepare a batch of 120 SMS messages for Infobip
+When I submit the batch to the Communication Module
+Then the batch should be split into 2 requests
+And each request should contain no more than 100 messages
+And all messages should be accepted by Infobip"
+"Test","Payload size just under 4MB","Functional","Given the Communication Module is integrated with Infobip Messages API
+Given I prepare a batch of messages with total payload size just under 4MB
+When I submit the batch to the Communication Module
+Then the request should be accepted by Infobip
+And no splitting should occur"
+"Test","Payload size exceeds 4MB","Functional","Given the Communication Module is integrated with Infobip Messages API
+Given I prepare a batch of messages with total payload size over 4MB
+When I submit the batch to the Communication Module
+Then the batch should be split into multiple requests
+And each request should not exceed 4MB
+And all messages should be accepted by Infobip"
+"Test","Infobip rejects batch due to size limits","Negative","Given the Communication Module is integrated with Infobip Messages API
+Given I prepare a batch that exceeds Infobip's limits
+When I submit the batch to the Communication Module
+Then the system should retry with smaller batch sizes
+And logs or alerts should indicate the reason for rejection"
+"Test","Logging and alerting when limits are exceeded","Functional","Given the Communication Module is integrated with Infobip Messages API
+Given I prepare a batch that exceeds either the batch size or payload size limit
+When I submit the batch to the Communication Module
+Then the system should log or alert that the batch was split due to limit constraints" 
