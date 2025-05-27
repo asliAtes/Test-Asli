@@ -1,0 +1,91 @@
+name: Playwright Tests
+
+on:
+  # Manual trigger for single test or test sets
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Select test execution type'
+        required: true
+        type: choice
+        options:
+          - single_test
+          - test_set
+        default: 'single_test'
+      test_path:
+        description: 'Test path or name (for single test, e.g., tests/login.spec.ts)'
+        required: false
+        type: string
+      test_set:
+        description: 'Test set to run (comma-separated tags, e.g., @smoke,@regression)'
+        required: false
+        type: string
+      environment:
+        description: 'Environment to run tests against'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+        default: 'staging'
+
+  # Scheduled test runs (commented out for now)
+  # schedule:
+  #   # Run smoke tests daily at 02:00 UTC
+  #   - cron: '0 2 * * *'
+  #   # Run regression tests every Monday at 01:00 UTC
+  #   - cron: '0 1 * * 1'
+
+jobs:
+  test:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: |
+        npm ci
+        npx playwright install --with-deps
+
+    - name: Create env file
+      run: |
+        echo "JIRA_API_TOKEN=${{ secrets.JIRA_API_TOKEN }}" >> .env
+        echo "XRAY_CLIENT_ID=${{ secrets.XRAY_CLIENT_ID }}" >> .env
+        echo "XRAY_CLIENT_SECRET=${{ secrets.XRAY_CLIENT_SECRET }}" >> .env
+        echo "ENVIRONMENT=${{ github.event.inputs.environment || 'staging' }}" >> .env
+
+    - name: Run Tests
+      run: |
+        if [ "${{ github.event.inputs.test_type }}" = "single_test" ] && [ -n "${{ github.event.inputs.test_path }}" ]; then
+          # Run single test
+          npm run test -- --grep "${{ github.event.inputs.test_path }}"
+        elif [ "${{ github.event.inputs.test_type }}" = "test_set" ] && [ -n "${{ github.event.inputs.test_set }}" ]; then
+          # Run test set
+          npm run test -- --tags "${{ github.event.inputs.test_set }}"
+        fi
+
+    - name: Upload test results to Xray
+      if: always()
+      run: node export-rcs-to-xray.js
+      env:
+        XRAY_CLIENT_ID: ${{ secrets.XRAY_CLIENT_ID }}
+        XRAY_CLIENT_SECRET: ${{ secrets.XRAY_CLIENT_SECRET }}
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: playwright-report
+        path: |
+          playwright-report/
+          test-results/
+          cucumber-report.html
+        retention-days: 30 
