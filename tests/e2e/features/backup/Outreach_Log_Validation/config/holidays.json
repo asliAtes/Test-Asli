@@ -1,0 +1,18 @@
+{
+  "us_federal_holidays": {
+    "2024": {
+      "new_years_day": "2024-01-01",
+      "mlk_day": "2024-01-15",
+      "presidents_day": "2024-02-19",
+      "memorial_day": "2024-05-27",
+      "juneteenth": "2024-06-19",
+      "independence_day": "2024-07-04",
+      "labor_day": "2024-09-02",
+      "columbus_day": "2024-10-14",
+      "veterans_day": "2024-11-11",
+      "thanksgiving": "2024-11-28",
+      "christmas": "2024-12-25"
+    }
+  },
+  "additional_holidays": []
+} 

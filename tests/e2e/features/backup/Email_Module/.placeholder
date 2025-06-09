@@ -1,0 +1,16 @@
+# Email Module Testing - Placeholder
+
+This directory will contain email testing features for the Communication Module.
+
+## TODO:
+1. Create a separate project structure to avoid TypeScript module conflicts
+2. Implement the test cases described in README-TestResults.md:
+   - Send email using SendGrid
+   - Missing required email fields
+   - Invalid email format
+3. Configure the test to use the email endpoint: http://3.133.216.212/app4/kredos/comm/email
+
+## Implementation Guidelines:
+- Use the SendGrid format from the Postman collection
+- Follow the same error handling approach used in the SMS tests
+- Keep tests independent and robust 
