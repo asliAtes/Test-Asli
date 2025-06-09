@@ -1,4 +1,0 @@
-"Issue Type","Summary","Test Type","Steps","Expected Result","Labels"
-"Test","MongoDB unavailable with flag=true","Manual","1. Lambda flag true olarak ayarlanır\n2. MongoDB erişilemez yapılır\n3. API endpoint'ine email raporu istenir","Dönen cevapta veritabanı bağlantı hatası mesajı olmalı","DEV-1000"
-"Test","PSQL unavailable with flag=false","Manual","1. Lambda flag false olarak ayarlanır\n2. PSQL erişilemez yapılır\n3. API endpoint'ine email raporu istenir","Dönen cevapta veritabanı bağlantı hatası mesajı olmalı","DEV-1000"
-"Test","Invalid or missing flag value","Manual","1. Lambda flag eksik veya geçersiz yapılır\n2. API endpoint'ine email raporu istenir","Dönen cevapta konfigürasyon hatası veya default davranış mesajı olmalı","DEV-1000" 

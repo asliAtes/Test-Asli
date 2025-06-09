@@ -1,5 +1,73 @@
-node_modules
-node_modules
-.env
-reports
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build and output folders
+dist/
+build/
+
+# Test outputs and reports
+test-results/
+playwright-report/
+reports/
+screenshots/
+*.png
+cucumber-report.html
+cucumber-report.json
+
+# Log files
 *.log
+diagnostics/
+logs/
+*.tar.gz
+
+# Environment and system files
+.env
+.DS_Store
+.env.*
+
+# IDE/editor folders
+.vscode/
+.idea/
+*.iml
+
+# Temporary folders
+temp*/
+archives/
+outputs/
+
+# Test data (if contains sensitive information)
+test-data/
+data/
+
+# Xray temporary files
+.xray-token
+.xray/temp/
+
+# Backup files
+*_backup/
+*_backup.*/
+*.bak
+
+# Specific files to ignore
+malformed_json_output.json
+hs_err_pid*.log
+git_KredosAI_MAB_USCC_Standalone.*/
+used_acct_nums.txt
+used_treatment_ids.txt
+
+# Documentation tool folders
+docs/cursor/
+
+# Xray and Jira related
+xray-config/
+.xray/
+xray.json
+xray-results/
+jira-credentials.json
+.jira/
+jira-config.json
+**/test-execution-*.json
+**/test-run-*.json
+xray-reports/
+jira-attachments/

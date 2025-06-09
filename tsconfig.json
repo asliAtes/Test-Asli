@@ -1,18 +1,40 @@
 {
   "compilerOptions": {
-    "target": "es2020",
+    "target": "ES2018",
     "module": "commonjs",
+    "lib": ["ES2018", "DOM"],
     "strict": false,
     "noImplicitAny": false,
     "esModuleInterop": true,
-    "moduleResolution": "node",
-    "resolveJsonModule": true,
-    "types": ["node"],
     "skipLibCheck": true,
-    "baseUrl": ".", 
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "test_js",
+    "rootDir": ".",
+    "types": ["node", "@cucumber/cucumber", "chai"],
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "allowJs": true,
+    "baseUrl": ".",
     "paths": {
-      "@data": ["test-data.ts"]
+      "@src/*": ["src/*"],
+      "@tests/*": ["src/tests/*"],
+      "@common/*": ["src/tests/common/*"],
+      "@services/*": ["src/tests/common/services/*"],
+      "@config/*": ["src/tests/common/config/*"],
+      "@utils/*": ["src/tests/common/utils/*"],
+      "@features/*": ["src/tests/e2e/features/*"],
+      "@steps/*": ["src/tests/e2e/steps/*"],
+      "@integration/*": ["config/integration/*"]
     }
   },
-  "include": ["tests/**/*.ts", "test-data.ts"]
+  "include": [
+    "src/**/*",
+    "tests/**/*",
+    "xray/config/upload-to-xray.ts",
+    "config/integration/index.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "test_js"
+  ]
 }

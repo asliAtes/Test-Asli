@@ -1,0 +1,23 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "@cucumber/cucumber", "chai"],
+    "esModuleInterop": true,
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "baseUrl": ".",
+    "paths": {
+      "@utils/*": ["utils/*"],
+      "@src/*": ["../src/*"],
+      "@config/*": ["config/*"]
+    }
+  },
+  "include": [
+    "./**/*.ts",
+    "../src/**/*.ts"
+, "../xray/config/upload-to-xray.ts", "../config/integration/index.ts"  ],
+  "exclude": [
+    "node_modules"
+  ]
+} 

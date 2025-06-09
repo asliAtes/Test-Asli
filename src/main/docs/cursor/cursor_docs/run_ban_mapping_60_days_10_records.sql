@@ -1,0 +1,105 @@
+-- MySQL dump 10.13  Distrib 8.0.42, for Linux (x86_64)
+--
+-- Host: kredosai-prod-mysql.cluster-cf6s3bjw1klm.us-east-2.rds.amazonaws.com    Database: kreedos
+-- ------------------------------------------------------
+-- Server version	8.0.32
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+SET @MYSQLDUMP_TEMP_LOG_BIN = @@SESSION.SQL_LOG_BIN;
+SET @@SESSION.SQL_LOG_BIN= 0;
+
+--
+-- GTID state at the beginning of the backup 
+--
+
+SET @@GLOBAL.GTID_PURGED=/*!80000 '+'*/ '';
+
+--
+-- Table structure for table `run_60_days_old_10_records`
+--
+
+DROP TABLE IF EXISTS `run_60_days_old_10_records`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `run_60_days_old_10_records` (
+  `run_id` varchar(45) NOT NULL,
+  `ban_macro_mapping_id` varchar(45) NOT NULL,
+  `ban_no` varchar(255) DEFAULT NULL,
+  `macro_id` varchar(45) DEFAULT NULL,
+  `mobile_no` varchar(15) DEFAULT NULL,
+  `msg_id` varchar(45) DEFAULT NULL,
+  `msg_sequence` varchar(10) DEFAULT NULL,
+  `delta_timing` varchar(10) DEFAULT NULL,
+  `run_status` varchar(15) DEFAULT NULL,
+  `msg_sent_date` bigint DEFAULT NULL,
+  `comm_id` varchar(200) DEFAULT NULL,
+  `comm_mode` varchar(50) DEFAULT NULL,
+  `mail_status` varchar(50) DEFAULT NULL,
+  `mail` varchar(50) DEFAULT NULL,
+  `sms_status` varchar(200) DEFAULT NULL,
+  `customer_id` varchar(20) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `run_60_days_old_10_records`
+--
+
+LOCK TABLES `run_60_days_old_10_records` WRITE;
+/*!40000 ALTER TABLE `run_60_days_old_10_records` DISABLE KEYS */;
+INSERT INTO `run_60_days_old_10_records` VALUES ('000015d5-249c-4986-95db-d1b468081388','42b4e562-d7d5-4cb2-b38a-08d7b3d1c5d5','959741294','06901033-ff70-445d-8978-33c8473c68d9','3237427342','MSG_RRWW_2024-10-10','1','23','Started',1729271581969,NULL,NULL,NULL,'arguetay33@gmail.com',NULL,NULL),('00001677-8c9c-498b-81ae-ac639df7eb70','3c829188-d7f7-4bc9-9f32-24304f49e428','971852924','6ea93dd0-beba-4ee4-b6f2-52b063a6c6e5','8103941459','MSG_MY4I_2024-10-10','1','10','Started',1740755108627,NULL,NULL,NULL,'APRILKELLEY321123@GMAIL.COM',NULL,NULL),('000021bb-8830-43ba-9bed-d655b230587f','90986eb6-b7a5-41ac-b547-0f489e9debb3','101203824','8c67272e-ad0b-45c8-86db-16c44fb56343','9042339091','MSG_3OIH_2024-10-09','1','17','Started',1738509047964,NULL,NULL,NULL,'ALISONMERETE@GMAIL.COM',NULL,NULL),('00004218-f5db-4cab-82ae-ec4febeb8f53','eea5095b-4ad0-49fe-ad2c-ccd02deb281c','987479729','15abac83-de41-44cb-9095-ecd582f9dc15','3235321123','MSG_QPP3_2024-10-08','1','10','Mab',1740150733359,NULL,NULL,NULL,'BUGS6044@GMAIL.COM',NULL,NULL),('0000458c-fab7-4a39-812b-cfe61597b433','6f6c1092-43f5-40a5-a09b-6c7ed0db04c9','978462354','4f476fb2-286e-4027-aedf-dbb63417c3b3','9516929021','MSG_HV4W_2024-10-10','1','10','Started',1735925622780,NULL,NULL,NULL,'abovedefeat247@gmail.com',NULL,NULL),('00004b0e-e83f-40f7-8b33-e55d7c9ca2ea','7da0a861-51a8-4e88-b677-0aa0a7c48c91','987456579','3260d99f-843e-4ffd-8a37-043ac21c6279','7142764066','MSG_4D5N_2024-10-10','1','10','Mab',1740064299898,NULL,NULL,NULL,'AVALOS5881@YAHOO.COM',NULL,NULL),('000054b6-1fa5-4b77-8820-1e40987f2598','6d41e56f-0279-43cd-a444-677185cfa361','996884950','8add0274-f9f8-4df4-bc49-6fcdbf2ec44e','4804925382','MSG_4X0L_2024-10-10','1','7','Started',1737903811967,NULL,NULL,NULL,'velez.mia92@gmail.com',NULL,NULL),('00005797-d7b9-4aae-b1b3-81c971ca992b','cb07d1b3-36d4-49eb-9dc1-ad905573ca95','984299228','185c98b8-8650-41a9-b982-fb1e63db2420','4058244588','MSG_T2PY_2024-10-10','1','7','Started',1736093032676,NULL,NULL,NULL,'\"\"',NULL,NULL),('000064b5-aa46-43bc-950c-944bec08e498','a6f464e9-50fc-4b03-9d44-653132242c5f','969056167','bf1c0892-0c01-4d62-b52e-17039b80aefc','8503461109','MSG_BHJ5_2024-10-09','1','21','Started',1732118709829,NULL,NULL,NULL,'progress2910@yahoo.com',NULL,NULL),('000080fc-d800-4939-a59d-6a6a58e4e546','dfd2cb1b-fb1f-4263-9708-d3b2ae4850ea','824908172','ae9cc8b8-fd6b-450e-922d-01a2c67a3d30','4257726405','MSG_8FFC_2024-10-09','1','21','Started',1741875212285,NULL,NULL,NULL,'SILVERPONDAFH@YAHOO.COM',NULL,NULL);
+/*!40000 ALTER TABLE `run_60_days_old_10_records` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `ban_macro_mapping_60_days_old_10_records`
+--
+
+DROP TABLE IF EXISTS `ban_macro_mapping_60_days_old_10_records`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ban_macro_mapping_60_days_old_10_records` (
+  `ban_macro_mapping_id` varchar(45) NOT NULL,
+  `ban_no` varchar(255) DEFAULT NULL,
+  `macro_id` varchar(45) DEFAULT NULL,
+  `exp_id` varchar(45) DEFAULT NULL,
+  `risk_profile` varchar(1000) DEFAULT NULL,
+  `mobile_no` varchar(15) DEFAULT NULL,
+  `status_flag` varchar(45) DEFAULT NULL,
+  `customer_name` varchar(100) DEFAULT NULL,
+  `created_ts` mediumtext,
+  `updated_ts` mediumtext,
+  `recent_eval_date` varchar(255) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `ban_macro_mapping_60_days_old_10_records`
+--
+
+LOCK TABLES `ban_macro_mapping_60_days_old_10_records` WRITE;
+/*!40000 ALTER TABLE `ban_macro_mapping_60_days_old_10_records` DISABLE KEYS */;
+INSERT INTO `ban_macro_mapping_60_days_old_10_records` VALUES ('0000000d-b37b-42bf-b61e-887332d54ca2','203694544','1b303c2d-93b6-47dc-a2ff-f55da5283e1a','7f4a64a3-50f9-49df-9ce6-341931ae0db4','{\"COLLECTION_PATH\": [\"306\"], \"RECENT_EXIT_INDICATOR\": [\"0\", \"1\"], \"EMAIL_AVAILABLE_INDICATOR\": [\"0\", \"1\"]}','3144098350','IN_PROGRESS','TMOBILE','1738768288217','1738768288217','20250104'),('00000fdd-0d13-4740-8f28-3df52648a524','516593327','8adc64e4-676b-4de4-aa53-cb38c0d8ba52','c19abb9c-96ba-446c-ace3-412da18e1974','{\"COLLECTION_PATH\": [\"301\"], \"RECENT_EXIT_INDICATOR\": [\"0\"], \"EMAIL_AVAILABLE_INDICATOR\": [\"1\"]}','2064584676','IN_PROGRESS','TMOBILE','1734544946978','1734544946978','20241117'),('00001e1b-0c06-46eb-9574-87ec73427cc2','959266826','cab9ed80-f14b-4fd9-add5-ee6b0c9051b7','763a099b-a2b2-4d1c-b5bb-68e302e07609','{\"COLLECTION_PATH\": [\"302\"], \"RECENT_EXIT_INDICATOR\": [\"1\"], \"EMAIL_AVAILABLE_INDICATOR\": [\"1\"]}','9524573709','IN_PROGRESS','TMOBILE','1734455064581','1734455064581','20241215'),('0000215e-b78d-4b9a-9e55-83af2ec916c5','201216707','51a2c5cd-b2ad-4930-ba23-49cd19820f1d','7f4a64a3-50f9-49df-9ce6-341931ae0db4','{\"COLLECTION_PATH\": [\"306\"], \"RECENT_EXIT_INDICATOR\": [\"0\", \"1\"], \"EMAIL_AVAILABLE_INDICATOR\": [\"0\", \"1\"]}','9105053556','IN_PROGRESS','TMOBILE','1730736107654','1733256193173','20241102'),('00003d00-d629-4a69-8d0e-70dcf42b79b2','102053023','bf1c0892-0c01-4d62-b52e-17039b80aefc','763a099b-a2b2-4d1c-b5bb-68e302e07609','{\"COLLECTION_PATH\": [\"302\"], \"RECENT_EXIT_INDICATOR\": [\"1\"], \"EMAIL_AVAILABLE_INDICATOR\": [\"1\"]}','6314330389','IN_PROGRESS','TMOBILE','1736352198395','1736352198395','20250106'),('0000409c-453f-40b8-a32e-07b4afaaa52a','973624716','fce0eb9d-0163-481e-a072-9f0542e18dbb','7e27c30f-1830-485f-8dd2-6e91ce8d37a6','{\"COLLECTION_PATH\": [\"303\"], \"RECENT_EXIT_INDICATOR\": [\"1\"], \"EMAIL_AVAILABLE_INDICATOR\": [\"1\"]}','8044052277','IN_PROGRESS','TMOBILE','1729276432045','1729276432045',''),('00006512-8f7f-4e0f-94b8-d95cbe74173c','331176568','b28bdda3-75d0-4e89-9902-b67807c9ab4b','c19abb9c-96ba-446c-ace3-412da18e1974','{\"COLLECTION_PATH\": [\"301\"], \"RECENT_EXIT_INDICATOR\": [\"0\"], \"EMAIL_AVAILABLE_INDICATOR\": [\"1\"]}','2539616128','IN_PROGRESS','TMOBILE','1730217845125','1740928023061','20250228'),('000080a9-ea8c-43f2-b936-76ef424ae73f','956781575','eac39df8-e93a-4f00-b575-685f9aa791de','c19abb9c-96ba-446c-ace3-412da18e1974','{\"COLLECTION_PATH\": [\"301\"], \"RECENT_EXIT_INDICATOR\": [\"0\"], \"EMAIL_AVAILABLE_INDICATOR\": [\"1\"]}','3233046514','IN_PROGRESS','TMOBILE','1732469587194','1732469587194','20241023'),('000085bd-69de-43e8-8f10-e58d8e9d9467','100631650','4ae181fb-db1d-4ec9-8653-b1adc863bc70','cd748210-e16f-41c2-b791-a3c64de94792','{\"COLLECTION_PATH\": [\"303\"], \"RECENT_EXIT_INDICATOR\": [\"0\"], \"EMAIL_AVAILABLE_INDICATOR\": [\"1\"]}','6789337327','IN_PROGRESS','TMOBILE','1737475182068','1737475182068','20250119'),('0000a66e-c9e2-417e-9ebb-528f99adaa52','248017104','523be8a9-14a0-4c6f-9327-80cd3a0d4fbe','c19abb9c-96ba-446c-ace3-412da18e1974','{\"COLLECTION_PATH\": [\"301\"], \"RECENT_EXIT_INDICATOR\": [\"0\"], \"EMAIL_AVAILABLE_INDICATOR\": [\"1\"]}','8019197326','IN_PROGRESS','TMOBILE','1739546823510','1739546823510','');
+/*!40000 ALTER TABLE `ban_macro_mapping_60_days_old_10_records` ENABLE KEYS */;
+UNLOCK TABLES;
+SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2025-05-13 11:52:47

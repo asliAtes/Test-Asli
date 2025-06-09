@@ -1,9 +1,0 @@
-"Issue Type","Summary","Test Type","Gherkin"
-"Test","T-Mobile customer always uses BNE (true)","Functional","Given customer ""T-Mobile"" is configured
-When I send a message to any device
-Then the message should be delivered through ""SMS"" via ""BNE""
-And the response should indicate successful message acceptance"
-"Test","T-Mobile customer always uses BNE (false)","Functional","Given customer ""T-Mobile"" is configured
-When I send a message to any device
-Then the message should be delivered through ""SMS"" via ""BNE""
-And the response should indicate successful message acceptance" 

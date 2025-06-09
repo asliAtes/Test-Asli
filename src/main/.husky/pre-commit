@@ -1,0 +1,8 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+# Prevent committing unwanted files
+if git diff --cached --name-only | grep -E '\.log$|\.tar\.gz$|^outputs/|^archives/'; then
+  echo 'Gereksiz dosya commitlenemez!';
+  exit 1;
+fi 
