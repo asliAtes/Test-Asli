@@ -1,6 +1,6 @@
 import { OutreachLogFile } from '../../types/outreach.types';
 import { DatabaseService } from '../database.service';
-import { configManager } from '@integration/index';
+import { configManager } from '../../../../../config/integration/index';
 import { DatabaseConfig } from '../../types/database.types';
 
 export class OutreachLogService {

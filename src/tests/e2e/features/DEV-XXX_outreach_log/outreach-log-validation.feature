@@ -58,4 +58,26 @@ Feature: Outreach Log File Generation and Validation
     Given test data is prepared for outreach log generation
     When SFTP server is not available
     Then the system should retry delivery with exponential backoff
-    And errors should be logged appropriately 
+    And errors should be logged appropriately
+
+  @outreach-log-validation @s3-validation
+  Scenario: Comprehensive validation of latest outreach log from S3
+    Given today's outreach log file
+    When I validate the file format
+    Then line endings should be CR+LF
+    And file name should follow the convention
+    And file structure should be intact
+    And headers should be valid
+    And there should be no null values
+    And field formats should be valid
+    And data types should be consistent
+    And all required fields should be present
+    And it should be generated within the expected timeframe
+    And it should follow weekend generation rules
+
+  @outreach-log-validation @weekend-validation
+  Scenario: Validate outreach log file for weekend/holiday
+    Given an outreach log file is available for validation
+    When I validate the file content
+    Then it should follow weekend generation rules
+    And file structure should be intact 

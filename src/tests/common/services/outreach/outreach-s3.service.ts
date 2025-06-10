@@ -8,7 +8,14 @@ export class OutreachS3Service {
     private readonly prefix = 'Temporary-Files/';
 
     constructor() {
-        this.s3Client = new S3Client({ region: 'us-east-2' });
+        this.s3Client = new S3Client({ 
+            region: 'us-east-2',
+            credentials: {
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+                sessionToken: process.env.AWS_SESSION_TOKEN
+            }
+        });
     }
 
     async listOutreachLogs(startDate?: Date, endDate?: Date): Promise<string[]> {

@@ -44,7 +44,7 @@ done
 
 # Validate arguments
 if [[ $LATEST == true ]]; then
-    npm test -- --profile outreach-s3 --name "Validate latest outreach log from S3"
+    npm test -- --profile outreach-s3 --name "Validate daily log generation"
     exit 0
 fi
 
@@ -65,7 +65,7 @@ export END_DATE
 
 # Run the test with the specified dates
 if [[ "$START_DATE" == "$END_DATE" ]]; then
-    npm test -- --profile outreach-s3 --name "Check for validation errors in outreach logs"
+    npm test -- --profile outreach-s3 --name "Validate log file format compliance"
 else
-    npm test -- --profile outreach-s3 --name "Validate outreach logs for a date range"
+    npm test -- --profile outreach-s3 --name "Validate log file data quality"
 fi 

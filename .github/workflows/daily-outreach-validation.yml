@@ -1,0 +1,136 @@
+name: Daily Outreach Log Validation
+
+on:
+  schedule:
+    # Run every day at 18:00 UTC (adjust timezone as needed)
+    - cron: '0 18 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+env:
+  AWS_REGION: us-east-2
+
+jobs:
+  validate-outreach-logs:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+        aws-region: ${{ env.AWS_REGION }}
+        
+    - name: Run outreach log validation
+      id: validation
+      run: |
+        echo "Running validation..."
+        npx ts-node src/scripts/test-latest-outreach-log.ts > validation-output.log 2>&1
+        
+        # Check for critical issues
+        if grep -q "❌ FAIL\|CRITICAL\|Missing required header" validation-output.log; then
+          echo "critical_issues=true" >> $GITHUB_OUTPUT
+          echo "validation_status=FAILED" >> $GITHUB_OUTPUT
+        else
+          echo "critical_issues=false" >> $GITHUB_OUTPUT
+          echo "validation_status=PASSED" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Upload validation report
+      uses: actions/upload-artifact@v4
+      with:
+        name: outreach-validation-report-${{ github.run_number }}
+        path: validation-output.log
+        retention-days: 30
+        
+    - name: Send Slack notification on failure
+      if: steps.validation.outputs.critical_issues == 'true'
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        channel: '#data-quality'
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+        text: |
+          🚨 Outreach Log Validation Failed!
+          Critical issues found in the latest outreach log file.
+          Please check the validation report for details.
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+        
+    - name: Send email notification
+      if: steps.validation.outputs.critical_issues == 'true'
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: smtp.gmail.com
+        server_port: 587
+        username: ${{ secrets.EMAIL_USERNAME }}
+        password: ${{ secrets.EMAIL_PASSWORD }}
+        subject: "🚨 Outreach Log Validation - ${{ steps.validation.outputs.validation_status }}"
+        to: data-team@company.com
+        from: github-actions@company.com
+        body: |
+          Daily outreach log validation has completed with critical issues.
+          
+          Status: ${{ steps.validation.outputs.validation_status }}
+          Run ID: ${{ github.run_id }}
+          
+          Please check the attached validation report for detailed analysis.
+          
+          View full report: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        attachments: validation-output.log
+        
+    - name: Create GitHub issue on failure
+      if: steps.validation.outputs.critical_issues == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const logContent = fs.readFileSync('validation-output.log', 'utf8');
+          
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `🚨 Outreach Log Validation Failed - ${new Date().toISOString().split('T')[0]}`,
+            body: `## Daily Outreach Log Validation Failed
+            
+            **Date:** ${new Date().toISOString()}
+            **Status:** CRITICAL ISSUES FOUND
+            **Run ID:** ${context.runId}
+            
+            ### Critical Issues Detected
+            The daily validation of outreach log files has detected critical compliance failures.
+            
+            ### Actions Required
+            - [ ] Review validation report
+            - [ ] Fix data pipeline issues
+            - [ ] Verify file format compliance
+            - [ ] Update data generation process
+            
+            ### Validation Report
+            \`\`\`
+            ${logContent.substring(0, 5000)}${logContent.length > 5000 ? '\n... (truncated)' : ''}
+            \`\`\`
+            
+            **Full Report:** [View in Actions](${context.payload.repository.html_url}/actions/runs/${context.runId})
+            `,
+            labels: ['bug', 'data-quality', 'urgent']
+          });
+          
+    - name: Fail job if critical issues found
+      if: steps.validation.outputs.critical_issues == 'true'
+      run: |
+        echo "❌ Critical issues found in outreach log validation"
+        exit 1 

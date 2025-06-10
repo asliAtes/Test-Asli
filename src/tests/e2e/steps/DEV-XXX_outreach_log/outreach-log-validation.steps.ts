@@ -2,9 +2,12 @@ import { S3Client, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/clien
 import { Readable } from 'stream';
 import * as dotenv from 'dotenv';
 import path from 'path';
+import { setDefaultTimeout } from '@cucumber/cucumber';
 
 // Load environment variables from .env file
 dotenv.config({ path: '/Users/asliates/Desktop/KredosAI/testing-feature-test_automation_scripts/KredosApplication/automation/.env' });
+
+setDefaultTimeout(60000);
 
 interface OutreachLogValidationResult {
     fileName: string;
@@ -84,21 +87,34 @@ class OutreachLogValidator {
 
     async getLatestOutreachLog(): Promise<{ key: string; content: string }> {
         try {
-            // List all objects in the bucket with the specified prefix
-            const listCommand = new ListObjectsV2Command({
-                Bucket: this.bucketName,
-                Prefix: this.prefix
-            });
+            let allFiles: any[] = [];
+            let ContinuationToken: string | undefined = undefined;
+            do {
+                const listCommand = new ListObjectsV2Command({
+                    Bucket: this.bucketName,
+                    ContinuationToken
+                });
+                const response = await this.s3Client.send(listCommand);
+                if (response.Contents) {
+                    allFiles = allFiles.concat(response.Contents);
+                }
+                ContinuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+            } while (ContinuationToken);
 
-            const response = await this.s3Client.send(listCommand);
-            if (!response.Contents || response.Contents.length === 0) {
-                throw new Error('No outreach log files found');
-            }
+            console.log('S3\'ten dönen dosya sayısı:', allFiles.length);
+            console.log('İlk 5 dosya:', allFiles.slice(0, 5).map(f => f.Key));
 
-            // Filter for outreach log files and get the latest one
-            const outreachLogs = response.Contents
-                .filter(file => file.Key?.match(/KAI_Kredos_outreach_log_\d{14}\.csv$/))
-                .sort((a, b) => (b.LastModified?.getTime() || 0) - (a.LastModified?.getTime() || 0));
+            const outreachLogs = allFiles
+                .filter(file => file.Key?.includes('Temporary-Files/') && file.Key?.includes('KAI_Kredos_outreach'))
+                .map(file => ({
+                    ...file,
+                    dateFromName: (() => {
+                        const match = file.Key.match(/KAI_Kredos_outreach_log_(\d{14})\.csv/);
+                        return match ? match[1] : null;
+                    })()
+                }))
+                .filter(file => file.dateFromName)
+                .sort((a, b) => b.dateFromName.localeCompare(a.dateFromName));
 
             if (outreachLogs.length === 0) {
                 throw new Error('No valid outreach log files found');
@@ -285,42 +301,231 @@ class OutreachLogValidator {
     }
 
     private validateDataQuality(dataLines: string[], result: OutreachLogValidationResult) {
+        const nullValueErrors: string[] = [];
+        const formatErrors: string[] = [];
+        const typeErrors: string[] = [];
+        const requiredFieldErrors: string[] = [];
+
         for (let i = 0; i < dataLines.length; i++) {
             const line = dataLines[i];
             if (!line.trim()) continue; // Skip empty lines
 
             const fields = line.split(',').map(f => f.trim());
+            const lineNumber = i + 2; // +2 because of 0-based index and header row
             
             // Check for null values
-            if (fields.some(f => f === 'null' || f === '')) {
+            const nullFields = fields.map((f, idx) => ({ value: f, index: idx }))
+                .filter(({ value }) => value === 'null' || value === '');
+            
+            if (nullFields.length > 0) {
                 result.dataQuality.noNullValues = false;
-                result.errors.push(`Null or empty value found in line ${i + 2}`);
+                nullValueErrors.push(`Line ${lineNumber}: Null/empty values found in columns: ${nullFields.map(f => this.requiredHeaders[f.index]).join(', ')}`);
             }
 
-            // Validate field formats
-            this.validateFieldFormats(fields, i + 2, result);
+            // Validate field formats and types
+            this.validateFieldFormatsAndTypes(fields, lineNumber, formatErrors, typeErrors, requiredFieldErrors);
+        }
+
+        // Add all collected errors to the result
+        if (nullValueErrors.length > 0) {
+            result.errors.push(...nullValueErrors);
+        }
+        if (formatErrors.length > 0) {
+            result.dataQuality.validFormats = false;
+            result.errors.push(...formatErrors);
+        }
+        if (typeErrors.length > 0) {
+            result.dataQuality.dataTypeConsistency = false;
+            result.errors.push(...typeErrors);
+        }
+        if (requiredFieldErrors.length > 0) {
+            result.dataQuality.requiredFields = false;
+            result.errors.push(...requiredFieldErrors);
         }
     }
 
-    private validateFieldFormats(fields: string[], lineNumber: number, result: OutreachLogValidationResult) {
-        // Phone number format (simple check for demonstration)
+    private validateFieldFormatsAndTypes(
+        fields: string[], 
+        lineNumber: number, 
+        formatErrors: string[], 
+        typeErrors: string[],
+        requiredFieldErrors: string[]
+    ) {
+        // Phone number validation
         const phoneNumberIndex = this.requiredHeaders.indexOf('PHONE_NUMBER');
-        if (phoneNumberIndex >= 0 && fields[phoneNumberIndex]) {
-            if (!/^\d{10}$/.test(fields[phoneNumberIndex].replace(/\D/g, ''))) {
-                result.dataQuality.validFormats = false;
-                result.errors.push(`Invalid phone number format in line ${lineNumber}`);
+        if (phoneNumberIndex >= 0) {
+            const phoneNumber = fields[phoneNumberIndex];
+            if (!phoneNumber) {
+                requiredFieldErrors.push(`Line ${lineNumber}: Required field PHONE_NUMBER is missing`);
+            } else if (!/^\d{10}$/.test(phoneNumber.replace(/\D/g, ''))) {
+                formatErrors.push(`Line ${lineNumber}: Invalid phone number format: ${phoneNumber}`);
             }
         }
 
-        // Date format
+        // Date validation
         const dateIndex = this.requiredHeaders.indexOf('SEND_DATE');
-        if (dateIndex >= 0 && fields[dateIndex]) {
-            if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(fields[dateIndex])) {
-                result.dataQuality.validFormats = false;
-                result.errors.push(`Invalid date format in line ${lineNumber}`);
+        if (dateIndex >= 0) {
+            const date = fields[dateIndex];
+            if (!date) {
+                requiredFieldErrors.push(`Line ${lineNumber}: Required field SEND_DATE is missing`);
+            } else if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(date)) {
+                formatErrors.push(`Line ${lineNumber}: Invalid date format: ${date}`);
+            } else {
+                // Additional date validation
+                const [datePart, timePart] = date.split(' ');
+                const [year, month, day] = datePart.split('-').map(Number);
+                const [hour, minute, second] = timePart.split(':').map(Number);
+                
+                const dateObj = new Date(year, month - 1, day, hour, minute, second);
+                if (isNaN(dateObj.getTime())) {
+                    typeErrors.push(`Line ${lineNumber}: Invalid date value: ${date}`);
+                }
             }
         }
+
+        // Add more field validations as needed...
     }
 }
 
-export { OutreachLogValidator, OutreachLogValidationResult }; 
+export { OutreachLogValidator, OutreachLogValidationResult };
+
+// Add Cucumber step definitions
+import { Given, When, Then } from '@cucumber/cucumber';
+
+let validator: OutreachLogValidator;
+let latestLogFile: { key: string; content: string };
+let validationResult: OutreachLogValidationResult;
+
+// Initialize validator before each scenario
+Given('an outreach log file is available for validation', async function () {
+    validator = new OutreachLogValidator();
+    latestLogFile = await validator.getLatestOutreachLog();
+    console.log(`Retrieved log file: ${latestLogFile.key}`);
+});
+
+Given('today\'s outreach log file', async function () {
+    validator = new OutreachLogValidator();
+    latestLogFile = await validator.getLatestOutreachLog();
+    console.log(`Retrieved today's log file: ${latestLogFile.key}`);
+});
+
+When('I validate the file format', async function () {
+    validationResult = await validator.validateOutreachLog(latestLogFile.key, latestLogFile.content);
+    console.log('Format validation completed');
+});
+
+When('I validate the file content', async function () {
+    validationResult = await validator.validateOutreachLog(latestLogFile.key, latestLogFile.content);
+    console.log('Content validation completed');
+});
+
+When('I check the generation timestamp', async function () {
+    validationResult = await validator.validateOutreachLog(latestLogFile.key, latestLogFile.content);
+    console.log('Generation timestamp check completed');
+});
+
+Then('line endings should be CR+LF', function () {
+    if (!validationResult.formatCompliance.lineEndings) {
+        const lineEndingErrors = validationResult.errors.filter(e => e.includes('CR+LF') || e.includes('line ending'));
+        throw new Error(`Line ending validation failed: ${lineEndingErrors.join(', ')}`);
+    }
+    console.log('✓ Line endings are correct (CR+LF)');
+});
+
+Then('file name should follow the convention', function () {
+    if (!validationResult.formatCompliance.nameConvention) {
+        const nameErrors = validationResult.errors.filter(e => e.includes('name') || e.includes('pattern'));
+        throw new Error(`File name validation failed: ${nameErrors.join(', ')}`);
+    }
+    console.log('✓ File name follows convention');
+});
+
+Then('file structure should be intact', function () {
+    if (!validationResult.formatCompliance.fileStructure) {
+        const structureErrors = validationResult.errors.filter(e => e.includes('structure') || e.includes('blank row'));
+        throw new Error(`File structure validation failed: ${structureErrors.join(', ')}`);
+    }
+    console.log('✓ File structure is intact');
+});
+
+Then('headers should be valid', function () {
+    if (!validationResult.formatCompliance.headers) {
+        const headerErrors = validationResult.errors.filter(e => e.includes('header') || e.includes('Header'));
+        throw new Error(`Header validation failed: ${headerErrors.join(', ')}`);
+    }
+    console.log('✓ Headers are valid');
+});
+
+Then('there should be no null values', function () {
+    if (!validationResult.dataQuality.noNullValues) {
+        const nullErrors = validationResult.errors.filter(e => e.includes('Null/empty values found'));
+        console.error('Null value validation failed. Found the following issues:');
+        nullErrors.forEach(error => console.error(`  - ${error}`));
+        throw new Error('Null value validation failed. See above for details.');
+    }
+    console.log('✓ No null values found');
+});
+
+Then('field formats should be valid', function () {
+    if (!validationResult.dataQuality.validFormats) {
+        const formatErrors = validationResult.errors.filter(e => e.includes('Invalid') && e.includes('format'));
+        console.error('Field format validation failed. Found the following issues:');
+        formatErrors.forEach(error => console.error(`  - ${error}`));
+        throw new Error('Field format validation failed. See above for details.');
+    }
+    console.log('✓ Field formats are valid');
+});
+
+Then('data types should be consistent', function () {
+    if (!validationResult.dataQuality.dataTypeConsistency) {
+        const typeErrors = validationResult.errors.filter(e => e.includes('Invalid') && e.includes('value'));
+        console.error('Data type validation failed. Found the following issues:');
+        typeErrors.forEach(error => console.error(`  - ${error}`));
+        throw new Error('Data type validation failed. See above for details.');
+    }
+    console.log('✓ Data types are consistent');
+});
+
+Then('all required fields should be present', function () {
+    if (!validationResult.dataQuality.requiredFields) {
+        const fieldErrors = validationResult.errors.filter(e => e.includes('Required field') && e.includes('missing'));
+        console.error('Required field validation failed. Found the following issues:');
+        fieldErrors.forEach(error => console.error(`  - ${error}`));
+        throw new Error('Required field validation failed. See above for details.');
+    }
+    console.log('✓ All required fields are present');
+});
+
+Then('it should be generated within the expected timeframe', function () {
+    // Extract date from filename and check if it's recent
+    const dateMatch = latestLogFile.key.match(/(\d{14})/);
+    if (dateMatch) {
+        const fileDate = dateMatch[1];
+        const year = parseInt(fileDate.substring(0, 4));
+        const month = parseInt(fileDate.substring(4, 6));
+        const day = parseInt(fileDate.substring(6, 8));
+        const hour = parseInt(fileDate.substring(8, 10));
+        
+        const logDate = new Date(year, month - 1, day, hour);
+        const now = new Date();
+        const daysDiff = (now.getTime() - logDate.getTime()) / (1000 * 60 * 60 * 24);
+        
+        if (daysDiff > 2) {
+            throw new Error(`Log file is too old: ${daysDiff} days old`);
+        }
+    }
+    console.log('✓ File was generated within expected timeframe');
+});
+
+Then('it should follow weekend generation rules', function () {
+    // Check if any weekend/holiday specific errors were found
+    const weekendErrors = validationResult.errors.filter(e => 
+        e.includes('Sunday') || e.includes('holiday') || e.includes('weekend')
+    );
+    
+    if (weekendErrors.length > 0) {
+        console.log(`⚠️ Weekend/Holiday warnings: ${weekendErrors.join(', ')}`);
+    } else {
+        console.log('✓ Weekend generation rules followed');
+    }
+}); 

@@ -336,8 +336,8 @@ module.exports = {
   },
 
   'outreach-s3': [
-    'src/tests/e2e/features/DEV-958/outreach-s3-validation.feature',
-    '--require src/tests/e2e/steps/DEV-958/outreach-s3-validation.steps.ts',
+    'src/tests/e2e/features/DEV-XXX_outreach_log/outreach-s3-validation.feature',
+    '--require src/tests/e2e/steps/DEV-XXX_outreach_log/outreach-log-validation.steps.ts',
     '--require-module ts-node/register',
     '--format progress-bar'
   ].join(' '),
