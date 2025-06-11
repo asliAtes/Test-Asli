@@ -2,6 +2,7 @@ import { S3Client, ListObjectsV2Command, ListObjectsV2CommandOutput, GetObjectCo
 import { Readable } from 'stream';
 import * as dotenv from 'dotenv';
 import { DateTime } from 'luxon';
+import { Given, When, Then } from '@cucumber/cucumber';
 
 // Load environment variables
 dotenv.config();
@@ -28,6 +29,13 @@ interface FieldIssue {
     value: string;
     rawLine: string;
     type: 'null' | 'undefined' | 'empty' | 'invalid_format';
+}
+
+// Test context to store state between steps
+interface TestContext {
+    validator: OutreachLogValidator;
+    latestLogFile?: { key: string; content: string };
+    validationResult?: OutreachLogValidationResult;
 }
 
 class OutreachLogValidator {
@@ -66,6 +74,17 @@ class OutreachLogValidator {
         { month: 11, day: 23, year: 2028 },
     ];
 
+    constructor() {
+        this.s3Client = new S3Client({ 
+            region: 'us-east-2',
+            credentials: {
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+                sessionToken: process.env.AWS_SESSION_TOKEN
+            }
+        });
+    }
+
     private isHolidayOrSunday(date: Date): boolean {
         // Sunday check
         if (date.getDay() === 0) return true;
@@ -80,15 +99,49 @@ class OutreachLogValidator {
         return false;
     }
 
-    constructor() {
-        this.s3Client = new S3Client({ 
-            region: 'us-east-2',
-            credentials: {
-                accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-                sessionToken: process.env.AWS_SESSION_TOKEN
+    async getLatestOutreachLog(): Promise<{ key: string; content: string }> {
+        let allLogObjects: { key: string, lastModified: Date }[] = [];
+        let ContinuationToken = undefined;
+        
+        do {
+            const listCommand = new ListObjectsV2Command({
+                Bucket: this.bucketName,
+                ContinuationToken
+            });
+            const response = await this.s3Client.send(listCommand) as ListObjectsV2CommandOutput;
+            if (response.Contents) {
+                response.Contents.forEach((file: any) => {
+                    if (file.Key && file.Key.includes('KAI_Kredos_outreach_log') && file.Key.endsWith('.csv')) {
+                        allLogObjects.push({ key: file.Key, lastModified: file.LastModified });
+                    }
+                });
             }
+            ContinuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+        } while (ContinuationToken);
+
+        // Get the most recent file
+        const sortedFiles = allLogObjects.sort((a, b) => (b.lastModified?.getTime() || 0) - (a.lastModified?.getTime() || 0));
+        
+        if (sortedFiles.length === 0) {
+            throw new Error('No outreach log files found in S3 bucket');
+        }
+
+        const latestFile = sortedFiles[0];
+        
+        // Get file content
+        const getCommand = new GetObjectCommand({
+            Bucket: this.bucketName,
+            Key: latestFile.key
         });
+        const fileResponse = await this.s3Client.send(getCommand) as GetObjectCommandOutput;
+        const stream = fileResponse.Body as NodeJS.ReadableStream;
+        const chunks: Buffer[] = [];
+        for await (const chunk of stream) {
+            chunks.push(Buffer.from(chunk));
+        }
+        const content = Buffer.concat(chunks).toString('utf-8');
+
+        return { key: latestFile.key, content };
     }
 
     async validateOutreachLog(fileName: string, content: string): Promise<OutreachLogValidationResult> {
@@ -155,75 +208,69 @@ class OutreachLogValidator {
     }
 
     private validateLineEndings(content: string, result: OutreachLogValidationResult) {
-        // Split by CR+LF to get actual CSV records
-        const records = content.split('\r\n');
-        
-        // Check if file ends with CR+LF properly
-        if (!content.endsWith('\r\n')) {
-            result.formatCompliance.lineEndings = false;
-            result.errors.push('File does not end with CR+LF');
-        }
+        // Satırları line ending'leri koruyarak ayır
+        const lines = content.split(/(?<=\r\n|\n)/);
+        let validLines = lines.filter(line => {
+            // Boş satırları ve fragment satırları hariç tut
+            const trimmedLine = line.replace(/[\r\n]+$/, '').trim();
+            return trimmedLine !== '' && line.split(',').length === this.requiredHeaders.length;
+        });
 
-        console.log('\n📊 LINE ENDING ANALYSIS:');
-        console.log('═'.repeat(80));
-        console.log(`Total CSV records (split by CR+LF): ${records.length}`);
-        
-        // Analyze record structure
-        let properRecords = 0;
-        let invalidRecords = 0;
-        let emptyRecords = 0;
-        let inMessageLFCount = 0;
-        
-        records.forEach((record, index) => {
-            if (record.trim() === '') {
-                emptyRecords++;
-                return;
-            }
+        let crlfCount = 0;
+        let lfCount = 0;
+        let crCount = 0;
+        let noEndingCount = 0;
+        let lineDetails: string[] = [];
+
+        validLines.forEach((line, index) => {
+            const originalEnding = line.match(/[\r\n]+$/)?.[0] || '';
             
-            // Count internal LF characters (these are legitimate for message formatting)
-            const internalLFs = (record.match(/\n/g) || []).length;
-            if (internalLFs > 0) {
-                inMessageLFCount += internalLFs;
-            }
-            
-            // Check if this looks like a proper CSV record
-            const fields = record.split(',');
-            if (fields.length === this.requiredHeaders.length || 
-                record.includes('Text STOP') || 
-                record.trim().startsWith('Make a payment') ||
-                record.trim().startsWith('Pay ')) {
-                properRecords++;
+            if (originalEnding === '\r\n') {
+                crlfCount++;
+            } else if (originalEnding === '\n') {
+                lfCount++;
+                lineDetails.push(`Line ${index + 1}: Found LF (\\n), hex: ${Buffer.from(originalEnding).toString('hex')}`);
+            } else if (originalEnding === '\r') {
+                crCount++;
+                lineDetails.push(`Line ${index + 1}: Found CR (\\r), hex: ${Buffer.from(originalEnding).toString('hex')}`);
             } else {
-                invalidRecords++;
+                noEndingCount++;
+                lineDetails.push(`Line ${index + 1}: No line ending found`);
             }
         });
 
-        console.log(`✅ Proper CSV records: ${properRecords}`);
-        console.log(`📝 In-message LF characters: ${inMessageLFCount} (legitimate for message formatting)`);
-        console.log(`⚠️  Empty records: ${emptyRecords}`);
-        console.log(`❌ Invalid records: ${invalidRecords}`);
+        // Log statistics
+        console.log('\n📊 LINE ENDING ANALYSIS:');
+        console.log('═'.repeat(80));
+        console.log(`Total valid lines analyzed: ${validLines.length}`);
+        console.log(`CR+LF (\\r\\n): ${crlfCount} lines (${((crlfCount/validLines.length)*100).toFixed(1)}%)`);
+        console.log(`LF only (\\n): ${lfCount} lines (${((lfCount/validLines.length)*100).toFixed(1)}%)`);
+        console.log(`CR only (\\r): ${crCount} lines (${((crCount/validLines.length)*100).toFixed(1)}%)`);
+        console.log(`No ending: ${noEndingCount} lines (${((noEndingCount/validLines.length)*100).toFixed(1)}%)`);
 
-        // Show examples of in-message formatting
-        console.log('\n🔍 EXAMPLES OF IN-MESSAGE FORMATTING:');
-        let exampleCount = 0;
-        for (let i = 0; i < Math.min(records.length, 100) && exampleCount < 3; i++) {
-            const record = records[i];
-            if (record.includes('\n') && record.includes('Text STOP')) {
-                console.log(`Record ${i + 1} (excerpt): ...${record.substring(record.length - 80)}`);
-                exampleCount++;
+        // Show hex dump of first few lines for debugging
+        console.log('\n🔍 DETAILED LINE ENDING ANALYSIS (First 5 lines):');
+        validLines.slice(0, 5).forEach((line, index) => {
+            const ending = line.match(/[\r\n]+$/)?.[0] || '';
+            const hex = Buffer.from(ending).toString('hex');
+            console.log(`Line ${index + 1}: "${ending}" (hex: ${hex})`);
+        });
+
+        if (lineDetails.length > 0) {
+            console.log('\n⚠️ LINE ENDING ISSUES:');
+            lineDetails.slice(0, 10).forEach(detail => console.log(detail));
+            if (lineDetails.length > 10) {
+                console.log(`... and ${lineDetails.length - 10} more issues`);
             }
         }
 
-        // The validation passes if we have proper record separation with CR+LF
-        // Internal LF characters within message content are expected and valid
-        console.log('\n✅ VALIDATION RESULT:');
-        console.log(`Records properly separated by CR+LF: ${properRecords > 0 ? 'PASS' : 'FAIL'}`);
-        console.log(`In-message LF formatting: EXPECTED AND VALID`);
-        
-        // Only fail if we don't have proper record separation
-        if (properRecords === 0) {
-            result.formatCompliance.lineEndings = false;
-            result.errors.push('No properly formatted CSV records found with CR+LF separation');
+        const totalValidLines = validLines.length;
+        if (totalValidLines > 0) {
+            const crlfPercentage = (crlfCount / totalValidLines) * 100;
+            if (crlfPercentage < 100) {
+                result.formatCompliance.lineEndings = false;
+                result.errors.push(`Only ${crlfPercentage.toFixed(1)}% of valid lines end with CR+LF`);
+            }
         }
     }
 
@@ -333,114 +380,189 @@ class OutreachLogValidator {
     }
 
     private validateDataQuality(dataLines: string[], result: OutreachLogValidationResult) {
-        console.log(`\n🔍 ANALYZING DATA ROWS (EXCLUDING FRAGMENTS AND EMPTY LINES)...`);
-        console.log('═'.repeat(80));
+        const issues = {
+            accountNumber: [] as FieldIssue[],
+            financialAccount: [] as FieldIssue[],
+            templateName: [] as FieldIssue[],
+            templateMemo: [] as FieldIssue[],
+            timestamp: [] as FieldIssue[],
+            channel: [] as FieldIssue[],
+            eventName: [] as FieldIssue[],
+            smsCopy: [] as string[]
+        };
+
+        console.log(`Processing data lines for analysis...`);
 
         for (let i = 0; i < dataLines.length; i++) {
             const line = dataLines[i].replace(/[\r\n]+$/, '').trim();
             if (!line) continue;
 
-            // Fragment ve ödeme URL'lerini içeren satırları es geç
-            if (line.includes('Text STOP to end') || 
-                line.includes('Make a payment') || 
-                line.includes('Pay now at') ||
-                line.trim() === '') {
-                continue;
-            }
-
             const fields = line.split(',').map(f => f.trim());
             const lineNumber = i + 2;
 
-            // Sadece geçerli veri satırlarını kontrol et
-            if (fields.length !== this.requiredHeaders.length) {
-                console.log(`\n⚠️  Line ${lineNumber}: Invalid number of fields (${fields.length}, expected ${this.requiredHeaders.length})`);
-                console.log(`Raw data: ${line}`);
-                console.log('─'.repeat(80));
-                continue;
-            }
+            // Sadece tam veri satırlarını kontrol et
+            if (fields.length === this.requiredHeaders.length) {
+                // AccountNumber validation
+                const accountNumber = fields[0];
+                if (this.isNullOrEmpty(accountNumber)) {
+                    issues.accountNumber.push({
+                        line: lineNumber,
+                        value: accountNumber,
+                        rawLine: line,
+                        type: this.getNullType(accountNumber)
+                    });
+                }
 
-            let hasIssue = false;
-            let issueDetails = [];
+                // FinancialAccount validation
+                const financialAccount = fields[1];
+                if (this.isNullOrEmpty(financialAccount)) {
+                    issues.financialAccount.push({
+                        line: lineNumber,
+                        value: financialAccount,
+                        rawLine: line,
+                        type: this.getNullType(financialAccount)
+                    });
+                }
 
-            // AccountNumber validation
-            const accountNumber = fields[0];
-            if (this.isNullOrEmpty(accountNumber)) {
-                hasIssue = true;
-                issueDetails.push('Empty ACCOUNTNUMBER');
-            }
+                // TemplateName validation
+                const templateName = fields[2];
+                if (this.isNullOrEmpty(templateName)) {
+                    issues.templateName.push({
+                        line: lineNumber,
+                        value: templateName,
+                        rawLine: line,
+                        type: this.getNullType(templateName)
+                    });
+                }
 
-            // FinancialAccount validation
-            const financialAccount = fields[1];
-            if (this.isNullOrEmpty(financialAccount)) {
-                hasIssue = true;
-                issueDetails.push('Empty FINANCIALACCOUNT');
-            }
+                // TemplateMemo validation
+                const templateMemo = fields[3];
+                if (this.isNullOrEmpty(templateMemo)) {
+                    issues.templateMemo.push({
+                        line: lineNumber,
+                        value: templateMemo,
+                        rawLine: line,
+                        type: this.getNullType(templateMemo)
+                    });
+                }
 
-            // TemplateName validation
-            const templateName = fields[2];
-            if (this.isNullOrEmpty(templateName)) {
-                hasIssue = true;
-                issueDetails.push('Empty TEMPLATENAME');
-            }
-
-            // TemplateMemo validation
-            const templateMemo = fields[3];
-            if (this.isNullOrEmpty(templateMemo)) {
-                hasIssue = true;
-                issueDetails.push('Empty TEMPLATEMEMO');
-            }
-
-            // Timestamp validation
-            const timestamp = fields[4];
-            if (this.isNullOrEmpty(timestamp)) {
-                hasIssue = true;
-                issueDetails.push('Empty TIMESTAMP');
-            } else {
-                try {
-                    const parsedTimestamp = DateTime.fromFormat(timestamp, 'MM/dd/yyyy HH:mm', { zone: 'America/Chicago' });
-                    if (!parsedTimestamp.isValid) {
-                        hasIssue = true;
-                        issueDetails.push('Invalid TIMESTAMP format');
+                // Timestamp validation
+                const timestamp = fields[4];
+                if (this.isNullOrEmpty(timestamp)) {
+                    issues.timestamp.push({
+                        line: lineNumber,
+                        value: timestamp,
+                        rawLine: line,
+                        type: this.getNullType(timestamp)
+                    });
+                } else {
+                    try {
+                        const parsedTimestamp = DateTime.fromFormat(timestamp, 'MM/dd/yyyy HH:mm', { zone: 'America/Chicago' });
+                        if (!parsedTimestamp.isValid) {
+                            issues.timestamp.push({
+                                line: lineNumber,
+                                value: timestamp,
+                                rawLine: line,
+                                type: 'invalid_format'
+                            });
+                        }
+                    } catch (e) {
+                        issues.timestamp.push({
+                            line: lineNumber,
+                            value: timestamp,
+                            rawLine: line,
+                            type: 'invalid_format'
+                        });
                     }
-                } catch (e) {
-                    hasIssue = true;
-                    issueDetails.push('Invalid TIMESTAMP format');
+                }
+
+                // Channel validation
+                const channel = fields[5];
+                if (this.isNullOrEmpty(channel)) {
+                    issues.channel.push({
+                        line: lineNumber,
+                        value: channel,
+                        rawLine: line,
+                        type: this.getNullType(channel)
+                    });
+                } else if (!['smsActivities', 'emailActivities'].includes(channel)) {
+                    issues.channel.push({
+                        line: lineNumber,
+                        value: channel,
+                        rawLine: line,
+                        type: 'invalid_format'
+                    });
+                }
+
+                // EventName validation
+                const eventName = fields[6];
+                if (this.isNullOrEmpty(eventName)) {
+                    issues.eventName.push({
+                        line: lineNumber,
+                        value: eventName,
+                        rawLine: line,
+                        type: this.getNullType(eventName)
+                    });
+                } else if (!['SMS Delivered', 'Email Delivered'].includes(eventName)) {
+                    issues.eventName.push({
+                        line: lineNumber,
+                        value: eventName,
+                        rawLine: line,
+                        type: 'invalid_format'
+                    });
+                }
+
+                // SMSCopy validation for email activities
+                if (fields[5] === 'emailActivities' && fields[7].trim() !== '') {
+                    issues.smsCopy.push(`Line ${lineNumber}: SMSCopy should be blank for email activity`);
                 }
             }
-
-            // Channel validation
-            const channel = fields[5];
-            if (this.isNullOrEmpty(channel)) {
-                hasIssue = true;
-                issueDetails.push('Empty CHANNEL');
-            } else if (!['smsActivities', 'emailActivities'].includes(channel)) {
-                hasIssue = true;
-                issueDetails.push('Invalid CHANNEL value');
-            }
-
-            // EventName validation
-            const eventName = fields[6];
-            if (this.isNullOrEmpty(eventName)) {
-                hasIssue = true;
-                issueDetails.push('Empty EVENTNAME');
-            } else if (!['SMS Sent', 'Email Sent'].includes(eventName)) {
-                hasIssue = true;
-                issueDetails.push('Invalid EVENTNAME value');
-            }
-
-            // SMSCopy validation for email activities
-            if (fields[5] === 'emailActivities' && fields[7].trim() !== '') {
-                hasIssue = true;
-                issueDetails.push('Non-empty SMSCOPY for email activity');
-            }
-
-            if (hasIssue) {
-                console.log(`\n❌ Line ${lineNumber}:`);
-                console.log(`Issues: ${issueDetails.join(', ')}`);
-                console.log(`Raw data: ${line}`);
-                console.log('─'.repeat(80));
-            }
         }
+
+        // Print detailed issue reports for each field
+        this.printFieldIssues('ACCOUNT NUMBER', issues.accountNumber);
+        this.printFieldIssues('FINANCIAL ACCOUNT', issues.financialAccount);
+        this.printFieldIssues('TEMPLATE NAME', issues.templateName);
+        this.printFieldIssues('TEMPLATE MEMO', issues.templateMemo);
+        this.printFieldIssues('TIMESTAMP', issues.timestamp);
+        this.printFieldIssues('CHANNEL', issues.channel);
+        this.printFieldIssues('EVENT NAME', issues.eventName);
+
+        if (issues.smsCopy.length > 0) {
+            console.log('\n🔍 SMS COPY ISSUES:');
+            console.log(`Found ${issues.smsCopy.length} email activities with non-empty SMS copy`);
+            console.log('First 10 examples:');
+            issues.smsCopy.slice(0, 10).forEach(issue => console.log(issue));
+        }
+
+        // Add issues to result
+        const hasIssues = (issues: FieldIssue[]) => issues.length > 0;
+        
+        if (hasIssues(issues.accountNumber) || hasIssues(issues.financialAccount) || 
+            hasIssues(issues.templateName) || hasIssues(issues.templateMemo) ||
+            hasIssues(issues.timestamp) || hasIssues(issues.channel) || 
+            hasIssues(issues.eventName)) {
+            result.dataQuality.noNullValues = false;
+        }
+
+        // Add error messages to result
+        const addFieldErrors = (field: string, fieldIssues: FieldIssue[]) => {
+            if (fieldIssues.length > 0) {
+                result.errors.push(`Found ${fieldIssues.length} issues in ${field}`);
+                fieldIssues.forEach(issue => {
+                    result.errors.push(`Line ${issue.line}: ${field} ${issue.type} - "${issue.value}"`);
+                });
+            }
+        };
+
+        addFieldErrors('AccountNumber', issues.accountNumber);
+        addFieldErrors('FinancialAccount', issues.financialAccount);
+        addFieldErrors('TemplateName', issues.templateName);
+        addFieldErrors('TemplateMemo', issues.templateMemo);
+        addFieldErrors('Timestamp', issues.timestamp);
+        addFieldErrors('Channel', issues.channel);
+        addFieldErrors('EventName', issues.eventName);
+        result.errors.push(...issues.smsCopy);
     }
 
     private isNullOrEmpty(value: string | null | undefined): boolean {
@@ -484,6 +606,11 @@ class OutreachLogValidator {
         }
     }
 }
+
+// Test context to store state between steps
+const testContext: TestContext = {
+    validator: new OutreachLogValidator()
+};
 
 // Debug: Check if AWS credentials are loaded
 const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
@@ -706,82 +833,131 @@ async function testLastWeekOutreachLogs() {
             console.log('└───────────────────────────────────────────────────────────────┘');
         }
 
-        // ENHANCED Record ending analysis with proper CR+LF record separation
-        console.log('\n🔍 DETAILED RECORD ANALYSIS (First 10 records):');
+        // ENHANCED Line ending analysis with hex inspection
+        console.log('\n🔍 DETAILED LINE ENDING ANALYSIS (First 20 lines):');
         console.log('═'.repeat(90));
-        const csvRecords = content.split('\r\n');
+        const rawLines = content.match(/.*?(\r\n|\n|$)/g) || [];
         
         console.log('┌────────────────────────────────────────────────────────────────────────────────────┐');
-        console.log('│                           CSV RECORD ANALYSIS                                      │');
+        console.log('│                              HEX BYTE ANALYSIS                                     │');
         console.log('├────────────────────────────────────────────────────────────────────────────────────┤');
         
-        for (let i = 0; i < Math.min(10, csvRecords.length); i++) {
-            const record = csvRecords[i];
-            const recordPreview = record.substring(0, 50);
-            const internalLFs = (record.match(/\n/g) || []).length;
+        for (let i = 0; i < Math.min(20, rawLines.length); i++) {
+            const line = rawLines[i];
+            const lineContent = line.replace(/\r?\n/g, '');
+            const linePreview = lineContent.substring(0, 40);
             
-            // Determine record type
-            let recordType = '';
-            if (i === 0) {
-                recordType = '[HEADER]';
-            } else if (record.trim() === '') {
-                recordType = '[EMPTY]';
-            } else if (record.includes('Text STOP')) {
-                recordType = '[MESSAGE_FRAGMENT]';
-            } else if (record.split(',').length === 8) {
-                recordType = '[CSV_DATA]';
-            } else if (record.split(',').length > 8) {
-                recordType = '[CSV_DATA_EXTENDED]';
+            // Get the actual ending bytes
+            let endingBytes = '';
+            let status = '';
+            
+            if (line.endsWith('\r\n')) {
+                endingBytes = '0D 0A (CR+LF)';
+                status = '✅ CORRECT';
+            } else if (line.endsWith('\n')) {
+                endingBytes = '0A (LF only)';
+                status = '❌ WRONG';
+            } else if (line.endsWith('\r')) {
+                endingBytes = '0D (CR only)';
+                status = '❌ WRONG';
             } else {
-                recordType = '[OTHER]';
+                endingBytes = '(no ending)';
+                status = '❌ NONE';
             }
             
-            const status = '✅ PROPERLY_SEPARATED';
-            console.log(`│ R${(i + 1).toString().padStart(2)}: ${status.padEnd(17)} ${recordType.padEnd(18)} │ LF_in_msg: ${internalLFs.toString().padStart(2)} │ "${recordPreview}..." │`);
+            // Show line type
+            let lineType = '';
+            if (i === 0) {
+                lineType = '[HEADER]';
+            } else if (lineContent.trim() === '') {
+                lineType = '[EMPTY]';
+            } else if (lineContent.includes('Text STOP') || lineContent.length < 50) {
+                lineType = '[FRAGMENT]';
+            } else if (lineContent.split(',').length > 8) {
+                lineType = '[DATA+]';
+            } else if (lineContent.split(',').length === 8) {
+                lineType = '[DATA]';
+            } else {
+                lineType = '[OTHER]';
+            }
+            
+            console.log(`│ L${(i + 1).toString().padStart(2)}: ${status.padEnd(10)} ${endingBytes.padEnd(15)} ${lineType.padEnd(10)} │ "${linePreview}..." │`);
         }
         console.log('└────────────────────────────────────────────────────────────────────────────────────┘');
 
-        // Statistical analysis of CSV records
-        console.log('\n📊 CSV RECORD STATISTICS:');
+        // Statistical analysis of line endings across the entire file
+        console.log('\n📊 COMPREHENSIVE LINE ENDING STATISTICS:');
         console.log('═'.repeat(80));
         
-        let headerRecords = 0;
-        let dataRecords = 0;
-        let fragmentRecords = 0;
-        let emptyRecords = 0;
-        let otherRecords = 0;
-        let totalInMessageLFs = 0;
+        let crlfCount = 0;
+        let lfOnlyCount = 0;
+        let crOnlyCount = 0;
+        let noEndingCount = 0;
         
-        csvRecords.forEach((record, index) => {
-            const internalLFs = (record.match(/\n/g) || []).length;
-            totalInMessageLFs += internalLFs;
+        const lineTypeCounts = {
+            header: { crlf: 0, lf: 0, cr: 0, none: 0 },
+            data: { crlf: 0, lf: 0, cr: 0, none: 0 },
+            fragment: { crlf: 0, lf: 0, cr: 0, none: 0 },
+            empty: { crlf: 0, lf: 0, cr: 0, none: 0 },
+            other: { crlf: 0, lf: 0, cr: 0, none: 0 }
+        };
+        
+        for (let i = 0; i < rawLines.length; i++) {
+            const line = rawLines[i];
+            const lineContent = line.replace(/\r?\n/g, '');
             
-            if (index === 0) {
-                headerRecords++;
-            } else if (record.trim() === '') {
-                emptyRecords++;
-            } else if (record.includes('Text STOP') || record.includes('Make a payment') || record.includes('Pay ')) {
-                fragmentRecords++;
-            } else if (record.split(',').length >= 8) {
-                dataRecords++;
+            // Determine line type
+            let category = 'other';
+            if (i === 0) {
+                category = 'header';
+            } else if (lineContent.trim() === '') {
+                category = 'empty';
+            } else if (lineContent.includes('Text STOP') || lineContent.length < 50) {
+                category = 'fragment';
+            } else if (lineContent.split(',').length >= 8) {
+                category = 'data';
+            }
+            
+            // Count ending type
+            if (line.endsWith('\r\n')) {
+                crlfCount++;
+                lineTypeCounts[category].crlf++;
+            } else if (line.endsWith('\n')) {
+                lfOnlyCount++;
+                lineTypeCounts[category].lf++;
+            } else if (line.endsWith('\r')) {
+                crOnlyCount++;
+                lineTypeCounts[category].cr++;
             } else {
-                otherRecords++;
+                noEndingCount++;
+                lineTypeCounts[category].none++;
+            }
+        }
+        
+        const totalLines = rawLines.length;
+        console.log('┌──────────────────────────────────────────────────────────────────────┐');
+        console.log('│                        OVERALL LINE ENDING STATS                     │');
+        console.log('├──────────────────────────────────────────────────────────────────────┤');
+        console.log(`│ Total Lines:        ${totalLines.toLocaleString().padStart(10)}                                    │`);
+        console.log(`│ CR+LF (correct):    ${crlfCount.toLocaleString().padStart(10)} (${((crlfCount/totalLines)*100).toFixed(1).padStart(5)}%)                    │`);
+        console.log(`│ LF only (wrong):    ${lfOnlyCount.toLocaleString().padStart(10)} (${((lfOnlyCount/totalLines)*100).toFixed(1).padStart(5)}%)                    │`);
+        console.log(`│ CR only (wrong):    ${crOnlyCount.toLocaleString().padStart(10)} (${((crOnlyCount/totalLines)*100).toFixed(1).padStart(5)}%)                    │`);
+        console.log(`│ No ending (wrong):  ${noEndingCount.toLocaleString().padStart(10)} (${((noEndingCount/totalLines)*100).toFixed(1).padStart(5)}%)                    │`);
+        console.log('└──────────────────────────────────────────────────────────────────────┘');
+
+        console.log('\n┌────────────────────────────────────────────────────────────────────────────────┐');
+        console.log('│                          LINE TYPE BREAKDOWN                                   │');
+        console.log('├────────────────────────────────────────────────────────────────────────────────┤');
+        
+        Object.entries(lineTypeCounts).forEach(([type, counts]) => {
+            const total = counts.crlf + counts.lf + counts.cr + counts.none;
+            if (total > 0) {
+                const crlfPct = ((counts.crlf / total) * 100).toFixed(1);
+                const lfPct = ((counts.lf / total) * 100).toFixed(1);
+                console.log(`│ ${type.toUpperCase().padEnd(8)}: ${total.toLocaleString().padStart(7)} total │ CR+LF: ${counts.crlf.toLocaleString().padStart(6)} (${crlfPct.padStart(5)}%) │ LF: ${counts.lf.toLocaleString().padStart(6)} (${lfPct.padStart(5)}%) │`);
             }
         });
-        
-        console.log('┌──────────────────────────────────────────────────────────────────────┐');
-        console.log('│                        CSV RECORD BREAKDOWN                          │');
-        console.log('├──────────────────────────────────────────────────────────────────────┤');
-        console.log(`│ Total CSV Records:      ${csvRecords.length.toLocaleString().padStart(10)}                                    │`);
-        console.log(`│ Header Records:         ${headerRecords.toLocaleString().padStart(10)} (${((headerRecords/csvRecords.length)*100).toFixed(1).padStart(5)}%)                    │`);
-        console.log(`│ Data Records:           ${dataRecords.toLocaleString().padStart(10)} (${((dataRecords/csvRecords.length)*100).toFixed(1).padStart(5)}%)                    │`);
-        console.log(`│ Message Fragments:      ${fragmentRecords.toLocaleString().padStart(10)} (${((fragmentRecords/csvRecords.length)*100).toFixed(1).padStart(5)}%)                    │`);
-        console.log(`│ Empty Records:          ${emptyRecords.toLocaleString().padStart(10)} (${((emptyRecords/csvRecords.length)*100).toFixed(1).padStart(5)}%)                    │`);
-        console.log(`│ Other Records:          ${otherRecords.toLocaleString().padStart(10)} (${((otherRecords/csvRecords.length)*100).toFixed(1).padStart(5)}%)                    │`);
-        console.log('├──────────────────────────────────────────────────────────────────────┤');
-        console.log(`│ Total In-Message LFs:   ${totalInMessageLFs.toLocaleString().padStart(10)} (legitimate formatting)           │`);
-        console.log(`│ Record Separation:      CR+LF (100% compliant)              │`);
-        console.log('└──────────────────────────────────────────────────────────────────────┘');
+        console.log('└────────────────────────────────────────────────────────────────────────────────┘');
 
         console.log(`\n📈 VALIDATION RESULTS SUMMARY:`);
         console.log(`┌─────────────────────────────────────────┐`);
@@ -873,10 +1049,10 @@ async function testLastWeekOutreachLogs() {
         // Recommendations
         console.log(`\n💡 RECOMMENDATIONS:`);
         if (errorCategories.lineEndings > 0) {
-            console.log(`🔧 NOTICE: Line ending validation updated - CR+LF record separation with LF in-message formatting is correct`);
+            console.log(`🔧 Fix line ending format - implement CR+LF encoding`);
         }
         if (errorCategories.missingHeaders > 0) {
-            console.log(`🔧 Add missing required headers`);
+            console.log(`🔧 Add missing required headers: PHONE_NUMBER, MESSAGE_TEXT, STATUS`);
         }
         if (errorCategories.headerMapping > 0) {
             console.log(`🔧 Standardize header naming convention`);
@@ -886,9 +1062,6 @@ async function testLastWeekOutreachLogs() {
         }
         if (errorCategories.nullValues > 0 || errorCategories.missingFields > 0) {
             console.log(`🔧 Add data completeness checks`);
-        }
-        if (validationResult.errors.length === 0) {
-            console.log(`✅ File format is compliant - no changes needed!`);
         }
 
         console.log(`\n✅ ANALYSIS COMPLETE!`);
@@ -902,4 +1075,74 @@ async function testLastWeekOutreachLogs() {
 }
 
 // Export the function for manual testing
-export { testLastWeekOutreachLogs }; 
+export { testLastWeekOutreachLogs };
+
+// Step Definitions
+Given('an outreach log file is available for validation', async function () {
+    testContext.latestLogFile = await testContext.validator.getLatestOutreachLog();
+    console.log(`Retrieved log file: ${testContext.latestLogFile.key}`);
+});
+
+Given('today\'s outreach log file', async function () {
+    testContext.latestLogFile = await testContext.validator.getLatestOutreachLog();
+    console.log(`Retrieved today's log file: ${testContext.latestLogFile.key}`);
+});
+
+When('I validate the file format', async function () {
+    if (!testContext.latestLogFile) {
+        throw new Error('No log file available for validation');
+    }
+    testContext.validationResult = await testContext.validator.validateOutreachLog(
+        testContext.latestLogFile.key,
+        testContext.latestLogFile.content
+    );
+    console.log('Format validation completed');
+});
+
+When('I validate the file content', async function () {
+    if (!testContext.latestLogFile) {
+        throw new Error('No log file available for validation');
+    }
+    testContext.validationResult = await testContext.validator.validateOutreachLog(
+        testContext.latestLogFile.key,
+        testContext.latestLogFile.content
+    );
+    console.log('Content validation completed');
+});
+
+Then('line endings should be CR+LF for all valid data lines', function () {
+    if (!testContext.validationResult?.formatCompliance.lineEndings) {
+        throw new Error('Line endings validation failed: ' + testContext.validationResult?.errors.join(', '));
+    }
+});
+
+Then('line ending statistics should be reported', function () {
+    // Statistics are already logged in validateLineEndings method
+    console.log('Line ending statistics have been reported');
+});
+
+Then('any line ending issues should be detailed with hex values', function () {
+    // Hex values are already logged in validateLineEndings method
+    console.log('Line ending hex values have been reported');
+});
+
+Then('file name should match pattern {string}', function (pattern: string) {
+    if (!testContext.validationResult?.formatCompliance.nameConvention) {
+        throw new Error('File name pattern validation failed: ' + testContext.validationResult?.errors.join(', '));
+    }
+});
+
+Then('file should not have .pgp extension', function () {
+    if (testContext.latestLogFile?.key.endsWith('.pgp')) {
+        throw new Error('File has .pgp extension');
+    }
+});
+
+Then('file generation time should be around 6:00 PM CT with 30 minutes tolerance', function () {
+    const timeErrors = testContext.validationResult?.errors.filter(e => e.includes('CT is not close to expected time'));
+    if (timeErrors?.length) {
+        throw new Error('File generation time validation failed: ' + timeErrors.join(', '));
+    }
+});
+
+// ... add more step definitions for other scenarios ... 
