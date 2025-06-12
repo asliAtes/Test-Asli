@@ -2,7 +2,7 @@ export interface RcsMetrics {
     total: number;
     delivered: number;
     pending: number;
-    undelivered: number;
+    failed: number;
 }
 
 export interface RcsTestFile {

@@ -42,7 +42,7 @@ Given('I have a valid outreach log file', async function () {
 
 When('I validate the file format', async function () {
     const log = testContext.generatedFile!;
-    const headerValidation = await outreachLogService.validateHeaders(log);
+        const headerValidation = await outreachLogService.validateHeaders(log);
     expect(headerValidation.isValid).to.be.true;
     expect(headerValidation.errors).to.be.empty;
 });

@@ -11,7 +11,7 @@ export class ApiService {
 
     async checkServiceStatus(service: string): Promise<string> {
         const response = await axios.get(`${this.config.baseUrl}/status/${service}`);
-        return response.data.status;
+            return response.data.status;
     }
 
     async getMabOperationalReportData() {

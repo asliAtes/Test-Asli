@@ -24,8 +24,8 @@ export class SftpService {
             // For now, just simulate successful delivery
             console.log(`[SFTP] Would deliver file ${file.name} to ${config.sftp?.host}:${config.sftp?.port}`);
             return {
-                success: true,
-                errors: []
+            success: true,
+            errors: []
             };
         } catch (error) {
             console.error('SFTP delivery failed:', error);

@@ -41,10 +41,6 @@ Feature: RCS Graphs and Metrics
     Then I should see messages with different statuses
     And the metrics should include delivery statuses
 
-Feature: RCS Graphs API Tests
-  As a user
-  I want to verify RCS graph data functionality
-  So that I can ensure accurate reporting
 
   @DEV-1044 @rcs @graphs @api
   Scenario: Verify RCS graph data structure and values

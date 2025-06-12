@@ -32,7 +32,7 @@ export class Config {
         this.communicationModuleUrl = process.env.COMMUNICATION_MODULE_URL || 'http://localhost:3003';
         this.uploadDir = process.env.UPLOAD_DIR || './uploads';
         this.database = {
-            host: process.env.DB_HOST || 'localhost',
+        host: process.env.DB_HOST || 'localhost',
             port: parseInt(process.env.DB_PORT || '3306', 10),
             database: process.env.DB_NAME || 'kredos_test',
             user: process.env.DB_USER || 'root',

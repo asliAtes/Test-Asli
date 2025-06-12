@@ -342,12 +342,12 @@ module.exports = {
     '--format progress-bar'
   ].join(' '),
 
-  // DEV-1044 RCS SMS Count Tracking Tests
+  // DEV-1044 RCS Metrics profile
   'dev-1044': {
     paths: ['src/tests/e2e/features/DEV-958/DEV-1044/**/*.feature'],
     require: [
       'src/tests/e2e/steps/rcs/**/*.ts',
-      'src/tests/e2e/steps/DEV-958/DEV-1044/**/*.ts',
+      'src/tests/e2e/steps/DEV-958/**/*.ts',
       'src/tests/utils/**/*.ts'
     ],
     requireModule: ['ts-node/register'],
@@ -360,4 +360,22 @@ module.exports = {
     tags: '@DEV-1044',
     timeout: parseInt(process.env.CUCUMBER_TIMEOUT || '60000')
   },
+
+  'rcs-ui-staging': [
+    '--require "src/tests/e2e/setup.ts"',
+    '--require "src/tests/e2e/steps/**/*.ts"',
+    'src/tests/e2e/features/DEV-958/DEV-1044/rcs-ui-validation.feature',
+    '--tags "@rcs-ui"',
+    '--format progress',
+    '--format json:reports/rcs-ui-test-results.json',
+    '--format html:reports/rcs-ui-test-results.html'
+  ].join(' '),
+
+  'rcs-simple': [
+    '--require "src/tests/e2e/setup.ts"',
+    '--require "src/tests/e2e/steps/**/*.ts"',
+    'src/tests/e2e/features/DEV-958/DEV-1044/rcs-simple-test.feature',
+    '--tags "@rcs-simple"',
+    '--format progress'
+  ].join(' '),
 };

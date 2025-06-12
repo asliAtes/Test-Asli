@@ -32,6 +32,7 @@ const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const dotenv = __importStar(require("dotenv"));
 const form_data_1 = __importDefault(require("form-data"));
+const glob = require('glob');
 dotenv.config();
 const XRAY_AUTH_URL = 'https://xray.cloud.getxray.app/api/v2/authenticate';
 const XRAY_IMPORT_URL = 'https://xray.cloud.getxray.app/api/v2/import/feature';
@@ -63,6 +64,10 @@ async function uploadFeatureFileToXray(featureFilePath) {
     catch (error) {
         console.error(`❌ Upload failed for ${featureFilePath}:`, ((_a = error.response) === null || _a === void 0 ? void 0 : _a.data) || error.message);
     }
+}
+function get1044FeatureFiles() {
+    // Tüm .feature dosyalarını alt klasörlerle birlikte bul
+    return glob.sync('src/tests/e2e/features/DEV-958/DEV-1044/**/*.feature');
 }
 async function uploadAllFeatures() {
     const backupDir = 'tests/features/backup';
