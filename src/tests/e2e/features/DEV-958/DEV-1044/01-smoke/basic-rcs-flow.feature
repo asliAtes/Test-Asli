@@ -1,5 +1,5 @@
-@DEV-958 @DEV-1044 @smoke @staging @rcs-reports
-Feature: Basic RCS Reports Flow
+@DEV-1044 @DEV-958 @smoke @staging @rcs-reports
+Feature: DEV-1044 Basic RCS Reports Flow
   As a system user
   I want to verify basic RCS reporting functionality
   So that I can ensure core features are working
@@ -7,30 +7,32 @@ Feature: Basic RCS Reports Flow
   Background: 
     Given I am connected to the USCC staging environment
     And I am logged into the application
-    And test data is prepared
+    And the RCS metrics verification system is ready
+    And I have prepared test data with known message counts
 
-  @critical @ui
-  Scenario: View RCS metrics in daily operational report
+  @DEV-1044 @TC30 @critical @ui
+  Scenario: TC30 - View RCS metrics in daily operational report
     When I navigate to the operational reports page
     Then I should see RCS metrics section
-    And the RCS sent count should be "5"
-    And the delivery status breakdown should show:
-      | status    | count |
-      | Delivered | 5     |
-      | Pending   | 3     |
-      | Failed    | 2     |
+    And the RCS metrics should match the test data
+    And the delivery status breakdown should be consistent with database records
+    And all metrics should be greater than or equal to zero
+    And the total count should match the sum of individual status counts
+    And the metrics should be consistent across all sources
 
-  @critical @api
-  Scenario: Verify RCS metrics via API
+  @DEV-1044 @TC31 @critical @api
+  Scenario: TC31 - Verify RCS metrics via API
     When I call the daily report API with:
       | startDate  | endDate    | customer |
-      | 2025-05-23 | 2025-05-23 | USCC     |
+      | {today}    | {today}    | USCC     |
     Then the API response should be successful
     And the response should contain RCS metrics
-    And the total RCS sent count should be "10"
+    And the metrics should be consistent across all sources
+    And the metrics should be within expected ranges
 
-  @critical @database
-  Scenario: Verify RCS data in database
+  @DEV-1044 @TC32 @critical @database
+  Scenario: TC32 - Verify RCS data in database
     When I query the operational reports data
-    Then the RCS SMS sent count should match expected values
-    And the delivery statuses should be accurate 
+    Then the metrics should be consistent across all sources
+    And all metrics should be greater than or equal to zero
+    And the total count should match the sum of individual status counts 

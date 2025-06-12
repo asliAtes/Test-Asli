@@ -1,6 +1,6 @@
-import { ApiService } from '@services/api.service';
-import { DatabaseService } from '@services/database.service';
-import { UIService } from '@services/ui.service';
+import { ApiService } from '../../../../../../common/services/api.service';
+import { DatabaseService } from '../../../../../../common/services/database.service';
+import { UIService } from '../../../../../../common/services/ui.service';
 
 export interface RcsMetrics {
     total: number;

@@ -1,5 +1,5 @@
-@DEV-958 @DEV-1044 @api @staging @rcs-reports
-Feature: RCS Reports API Testing
+@DEV-1044 @DEV-958 @api @staging @rcs-reports
+Feature: DEV-1044 RCS Reports API Testing
   As an API consumer
   I want to verify RCS reporting APIs
   So that I can ensure data accuracy and error handling
@@ -8,8 +8,8 @@ Feature: RCS Reports API Testing
     Given the API endpoints are accessible
     And test data is prepared
 
-  @smoke @daily-report
-  Scenario: Get daily RCS metrics via API
+  @DEV-1044 @TC33 @smoke @daily-report
+  Scenario: TC33 - Get daily RCS metrics via API
     When I call "/get-mabOperationalReportData" with parameters:
       | startDate  | endDate    | customer | commType |
       | 2025-05-23 | 2025-05-23 | USCC     | rcs      |
@@ -20,8 +20,8 @@ Feature: RCS Reports API Testing
       | total_records   | 10    |
     And the delivery breakdown should be accurate
 
-  @smoke @weekly-report
-  Scenario: Get weekly RCS metrics via API
+  @DEV-1044 @TC34 @smoke @weekly-report
+  Scenario: TC34 - Get weekly RCS metrics via API
     When I call "/get-mabReportsData" with parameters:
       | startDate  | endDate    | customer | commType |
       | 2025-05-17 | 2025-05-23 | USCC     | rcs      |
@@ -29,8 +29,8 @@ Feature: RCS Reports API Testing
     And the weekly trend data should be present
     And each day should have valid RCS metrics
 
-  @negative
-  Scenario Outline: Handle invalid API parameters
+  @DEV-1044 @TC35 @negative
+  Scenario Outline: TC35 - Handle invalid API parameters
     When I call "/get-mabOperationalReportData" with parameters:
       | startDate   | endDate   | customer   | commType   |
       | <startDate> | <endDate> | <customer> | <commType> |
@@ -44,8 +44,8 @@ Feature: RCS Reports API Testing
       | 2025-05-23 | 2025-05-23 | INVALID  | rcs      | 404    | Customer not found         |
       | 2025-05-23 | 2025-05-23 | USCC     | invalid  | 400    | Invalid communication type |
 
-  @edge-case
-  Scenario: Handle large date range request
+  @DEV-1044 @TC36 @edge-case
+  Scenario: TC36 - Handle large date range request
     When I call "/get-mabReportsData" with parameters:
       | startDate  | endDate    | customer | commType |
       | 2024-01-01 | 2025-12-31 | USCC     | rcs      |
@@ -53,8 +53,8 @@ Feature: RCS Reports API Testing
     And the response time should be under 5 seconds
     And the data should be properly paginated
 
-  @data-validation
-  Scenario: Verify data consistency between daily and weekly reports
+  @DEV-1044 @TC37 @data-validation
+  Scenario: TC37 - Verify data consistency between daily and weekly reports
     When I get daily report data for the week
     And I get weekly report data for the same period
     Then the aggregated daily totals should match weekly totals
