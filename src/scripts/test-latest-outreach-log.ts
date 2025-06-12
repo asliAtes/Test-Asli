@@ -33,7 +33,7 @@ interface FieldIssue {
 class OutreachLogValidator {
     private s3Client: S3Client;
     private readonly bucketName = 'kredos-uscellular-production';
-    private readonly prefix = 'Temporary-Files/';
+    private readonly prefix = 'kredos-uscellular-production/Temporary-Files/';
     private readonly requiredHeaders = [
         'ACCOUNTNUMBER',
         'FINANCIALACCOUNT', 
@@ -256,13 +256,13 @@ class OutreachLogValidator {
                 year: parseInt(year),
                 month: parseInt(month),
                 day: parseInt(day),
-                hour: 18, // 6:00 PM CT
+                hour: 17, // 5:00 PM CT
                 minute: 0
             }, { zone: 'America/Chicago' });
 
             const timeDiff = Math.abs(fileTime.diff(expectedTime).as('minutes'));
             if (timeDiff > 30) { // Allow 30 minutes deviation
-                result.errors.push(`File time ${fileTime.toFormat('HH:mm')} CT is not close to expected time 18:00 CT`);
+                result.errors.push(`File time ${fileTime.toFormat('HH:mm')} CT is not close to expected time 17:00 CT`);
             }
         }
     }
@@ -498,408 +498,101 @@ console.log(`Session Token: ${sessionToken ? '✅ Present' : '❌ Missing'} (${s
 console.log('----------------------\n');
 
 async function testLastWeekOutreachLogs() {
+    console.log('Starting outreach log validation...');
+    const validator = new OutreachLogValidator();
+    
     try {
-        console.log('🔍 ANALYZING LATEST OUTREACH LOG FILE...');
-        console.log('=====================================\n');
+        console.log('Listing objects in S3 bucket...');
+        const listCommand = new ListObjectsV2Command({
+            Bucket: validator['bucketName'],
+            Prefix: validator['prefix']
+        });
         
-        const validator = new OutreachLogValidator();
-        const s3Client = validator['s3Client'];
-        const bucketName = 'kredos-uscellular-production';
-        let allLogObjects: { key: string, lastModified: Date }[] = [];
-        let ContinuationToken = undefined;
-        do {
-            const listCommand = new ListObjectsV2Command({
-                Bucket: bucketName,
-                ContinuationToken
-            });
-            const response = await s3Client.send(listCommand) as ListObjectsV2CommandOutput;
-            if (response.Contents) {
-                response.Contents.forEach((file: any) => {
-                    if (file.Key && file.Key.includes('KAI_Kredos_outreach_log') && file.Key.endsWith('.csv')) {
-                        allLogObjects.push({ key: file.Key, lastModified: file.LastModified });
-                    }
-                });
-            }
-            ContinuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
-        } while (ContinuationToken);
-
-        // Get the most recent file
-        const sortedFiles = allLogObjects.sort((a, b) => (b.lastModified?.getTime() || 0) - (a.lastModified?.getTime() || 0));
+        const listResponse = await validator['s3Client'].send(listCommand);
+        console.log(`Found ${listResponse.Contents?.length || 0} objects in bucket`);
         
-        if (sortedFiles.length === 0) {
-            console.log('❌ No outreach log files found in S3 bucket.');
+        if (!listResponse.Contents || listResponse.Contents.length === 0) {
+            console.log('No files found in bucket');
             return;
         }
 
-        const latestFile = sortedFiles[0];
-        console.log(`📋 TOTAL FILES IN S3: ${allLogObjects.length}`);
-        console.log(`🎯 ANALYZING LATEST FILE: ${latestFile.key}`);
-        
-        const centralTime = DateTime.fromJSDate(latestFile.lastModified).setZone('America/Chicago');
-        const now = DateTime.utc();
-        const fileAge = now.diff(DateTime.fromJSDate(latestFile.lastModified)).as('hours');
-        
-        console.log(`📅 File Date: ${centralTime.toFormat('yyyy-LL-dd HH:mm:ss ZZZZ')}`);
-        console.log(`⏰ File Age: ${fileAge.toFixed(1)} hours old`);
-        console.log(`📆 Day of Week: ${centralTime.toFormat('cccc')}`);
-        
-        const isWeekend = centralTime.weekday === 6 || centralTime.weekday === 7;
-        if (isWeekend) {
-            console.log(`⚠️  WEEKEND FILE DETECTED`);
-        } else {
-            console.log(`✅ WEEKDAY FILE`);
-        }
-        
-        console.log('\n' + '='.repeat(60));
-        console.log('📥 DOWNLOADING AND ANALYZING FILE...');
-        console.log('='.repeat(60));
+        // Get the latest file
+        const latestFile = listResponse.Contents
+            .filter(obj => obj.Key?.endsWith('.csv'))
+            .sort((a, b) => (b.LastModified?.getTime() || 0) - (a.LastModified?.getTime() || 0))[0];
 
-        // Get file content
+        if (!latestFile?.Key) {
+            console.log('No CSV files found');
+            return;
+        }
+
+        console.log(`Found latest file: ${latestFile.Key}`);
+        
+        // Get the file content
+        console.log('Fetching file content...');
         const getCommand = new GetObjectCommand({
-            Bucket: bucketName,
-            Key: latestFile.key
+            Bucket: validator['bucketName'],
+            Key: latestFile.Key
         });
-        const fileResponse = await s3Client.send(getCommand) as GetObjectCommandOutput;
-        const stream = fileResponse.Body as NodeJS.ReadableStream;
-        const chunks: Buffer[] = [];
-        for await (const chunk of stream) {
-            chunks.push(Buffer.from(chunk));
-        }
-        const content = Buffer.concat(chunks).toString('utf-8');
-
-        // Basic file statistics
-        const lines = content.split(/\r\n|\n/);
-        const fileSize = content.length;
-        const headerLine = lines[0] || '';
-        const headers = headerLine.split(',').map(h => h.trim());
         
-        console.log(`\n📊 FILE STATISTICS:`);
-        console.log(`├─ File Size: ${(fileSize / 1024 / 1024).toFixed(2)} MB`);
-        console.log(`├─ Total Lines: ${lines.length.toLocaleString()}`);
-        console.log(`├─ Data Lines: ${(lines.length - 1).toLocaleString()}`);
-        console.log(`├─ Header Columns: ${headers.length}`);
-        console.log(`└─ Average Line Length: ${(fileSize / lines.length).toFixed(1)} characters`);
-
-        console.log(`\n📋 HEADERS FOUND:`);
-        headers.forEach((header, index) => {
-            console.log(`├─ ${index + 1}. "${header}"`);
-        });
-
-        // Sample data lines
-        console.log(`\n📄 SAMPLE DATA LINES (first 3):`);
-        lines.slice(1, 4).forEach((line, index) => {
-            if (line.trim()) {
-                const fields = line.split(',').map(f => f.trim());
-                console.log(`├─ Line ${index + 2}: ${fields.length} fields`);
-                console.log(`│  └─ Sample: ${fields.slice(0, 3).join(' | ')}...`);
-            }
-        });
-
-        console.log('\n' + '='.repeat(60));
-        console.log('🔬 RUNNING COMPREHENSIVE VALIDATION...');
-        console.log('='.repeat(60));
-
-        // Run validation with increased sample size for better analysis
-        const validationResult = await validator.validateOutreachLog(latestFile.key, content);
+        const response = await validator['s3Client'].send(getCommand);
+        console.log('File content fetched successfully');
         
-        // DETAILED ROW-BY-ROW ANALYSIS
-        console.log('\n🔍 DETAILED ROW-BY-ROW ANALYSIS:');
-        console.log('='.repeat(80));
-        
-        // Header analysis first
-        console.log('\n📋 HEADER ANALYSIS:');
-        const requiredHeaders = ['ACCOUNTNUMBER', 'FINANCIALACCOUNT', 'TEMPLATENAME', 'TEMPLATEMEMO', 'TIMESTAMPCST-CDT', 'CHANNEL', 'EVENTNAME', 'SMSCOPY'];
-        const headerMappings = {
-            ACCOUNTNUMBER: ['ACCOUNTNUMBER'],
-            FINANCIALACCOUNT: ['FINANCIALACCOUNT'],
-            TEMPLATENAME: ['TEMPLATENAME'],
-            TEMPLATEMEMO: ['TEMPLATEMEMO'],
-            'TIMESTAMPCST-CDT': ['TIMESTAMPCST-CDT'],
-            CHANNEL: ['CHANNEL'],
-            EVENTNAME: ['EVENTNAME'],
-            SMSCOPY: ['SMSCOPY']
-        };
-        
-        console.log('┌────────────────────────────────────────────────────────────┐');
-        console.log('│                    HEADER MAPPING ANALYSIS                 │');
-        console.log('├────────────────────────────────────────────────────────────┤');
-        
-        requiredHeaders.forEach((required, index) => {
-            const alternatives = headerMappings[required] || [required];
-            const foundIdx = headers.findIndex(h => alternatives.some(a => a.toLowerCase() === h.toLowerCase()));
-            
-            if (foundIdx === -1) {
-                console.log(`│ Column ${index + 1}: ${required.padEnd(20)} │ ❌ MISSING                │`);
-            } else {
-                const found = headers[foundIdx];
-                const status = found === required ? '✅ EXACT' : '⚠️  MAPPED';
-                console.log(`│ Column ${index + 1}: ${required.padEnd(20)} │ ${status} (${found}) │`);
-            }
-        });
-        console.log('└────────────────────────────────────────────────────────────┘');
-
-        // Create column mapping for data analysis
-        const columnMapping: Record<string, number> = {};
-        requiredHeaders.forEach(required => {
-            const alternatives = headerMappings[required] || [required];
-            const foundIdx = headers.findIndex(h => alternatives.some(a => a.toLowerCase() === h.toLowerCase()));
-            if (foundIdx >= 0) {
-                columnMapping[required] = foundIdx;
-            }
-        });
-
-        console.log('\n📊 SAMPLE DATA ROWS ANALYSIS (First 20 rows):');
-        console.log('═'.repeat(100));
-        
-        // Analyze first 20 data rows in detail
-        for (let i = 1; i <= Math.min(21, lines.length - 1); i++) {
-            const line = lines[i];
-            if (!line || !line.trim()) {
-                console.log(`\nRow ${i + 1}: [EMPTY ROW]`);
-                continue;
-            }
-            
-            const fields = line.split(',').map(f => f.trim());
-            console.log(`\n┌─ ROW ${i + 1} ─────────────────────────────────────────────────────┐`);
-            console.log(`│ Total Fields: ${fields.length} | Expected: ${headers.length}                    │`);
-            console.log('├───────────────────────────────────────────────────────────────┤');
-            
-            // Check each required field
-            requiredHeaders.forEach((required, reqIndex) => {
-                const colIndex = columnMapping[required];
-                if (colIndex === undefined) {
-                    console.log(`│ ${required.padEnd(15)}: ❌ HEADER MISSING                  │`);
-                } else if (colIndex >= fields.length) {
-                    console.log(`│ ${required.padEnd(15)}: ❌ FIELD MISSING (col ${colIndex})        │`);
-                } else {
-                    const value = fields[colIndex];
-                    if (!value || value === '' || value === 'null') {
-                        console.log(`│ ${required.padEnd(15)}: ❌ EMPTY/NULL                      │`);
-                    } else {
-                        // Validate format based on field type
-                        let status = '✅ OK';
-                        let issue = '';
-                        
-                        if (required === 'PHONE_NUMBER') {
-                            if (!/^\d{10}$/.test(value.replace(/\D/g, ''))) {
-                                status = '❌ INVALID';
-                                issue = `(${value.length} chars: "${value.substring(0, 15)}...")`;
-                            }
-                        } else if (required === 'SEND_DATE') {
-                            if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) {
-                                status = '❌ INVALID';
-                                issue = `(format: "${value.substring(0, 20)}...")`;
-                            }
-                        }
-                        
-                        const displayValue = value.length > 25 ? value.substring(0, 25) + '...' : value;
-                        console.log(`│ ${required.padEnd(15)}: ${status} "${displayValue}" ${issue}│`);
-                    }
-                }
-            });
-            
-            // Show extra fields if any
-            if (fields.length > headers.length) {
-                console.log(`│ EXTRA FIELDS    : ⚠️  ${fields.length - headers.length} extra field(s) found      │`);
-            }
-            
-            console.log('└───────────────────────────────────────────────────────────────┘');
+        if (!response.Body) {
+            console.log('No content in file');
+            return;
         }
 
-        // ENHANCED Record ending analysis with proper CR+LF record separation
-        console.log('\n🔍 DETAILED RECORD ANALYSIS (First 10 records):');
-        console.log('═'.repeat(90));
-        const csvRecords = content.split('\r\n');
-        
-        console.log('┌────────────────────────────────────────────────────────────────────────────────────┐');
-        console.log('│                           CSV RECORD ANALYSIS                                      │');
-        console.log('├────────────────────────────────────────────────────────────────────────────────────┤');
-        
-        for (let i = 0; i < Math.min(10, csvRecords.length); i++) {
-            const record = csvRecords[i];
-            const recordPreview = record.substring(0, 50);
-            const internalLFs = (record.match(/\n/g) || []).length;
-            
-            // Determine record type
-            let recordType = '';
-            if (i === 0) {
-                recordType = '[HEADER]';
-            } else if (record.trim() === '') {
-                recordType = '[EMPTY]';
-            } else if (record.includes('Text STOP')) {
-                recordType = '[MESSAGE_FRAGMENT]';
-            } else if (record.split(',').length === 8) {
-                recordType = '[CSV_DATA]';
-            } else if (record.split(',').length > 8) {
-                recordType = '[CSV_DATA_EXTENDED]';
-            } else {
-                recordType = '[OTHER]';
-            }
-            
-            const status = '✅ PROPERLY_SEPARATED';
-            console.log(`│ R${(i + 1).toString().padStart(2)}: ${status.padEnd(17)} ${recordType.padEnd(18)} │ LF_in_msg: ${internalLFs.toString().padStart(2)} │ "${recordPreview}..." │`);
-        }
-        console.log('└────────────────────────────────────────────────────────────────────────────────────┘');
+        // Convert stream to string
+        console.log('Converting stream to string...');
+        const content = await streamToString(response.Body as Readable);
+        console.log(`File content length: ${content.length} bytes`);
 
-        // Statistical analysis of CSV records
-        console.log('\n📊 CSV RECORD STATISTICS:');
+        // Validate the file
+        console.log('Starting validation...');
+        const result = await validator.validateOutreachLog(latestFile.Key, content);
+        
+        // Print results
+        console.log('\n📊 VALIDATION RESULTS:');
         console.log('═'.repeat(80));
+        console.log(`File: ${result.fileName}`);
+        console.log('\nFormat Compliance:');
+        console.log(`- Line Endings: ${result.formatCompliance.lineEndings ? '✅' : '❌'}`);
+        console.log(`- Name Convention: ${result.formatCompliance.nameConvention ? '✅' : '❌'}`);
+        console.log(`- File Structure: ${result.formatCompliance.fileStructure ? '✅' : '❌'}`);
+        console.log(`- Headers: ${result.formatCompliance.headers ? '✅' : '❌'}`);
         
-        let headerRecords = 0;
-        let dataRecords = 0;
-        let fragmentRecords = 0;
-        let emptyRecords = 0;
-        let otherRecords = 0;
-        let totalInMessageLFs = 0;
+        console.log('\nData Quality:');
+        console.log(`- No Null Values: ${result.dataQuality.noNullValues ? '✅' : '❌'}`);
+        console.log(`- Valid Formats: ${result.dataQuality.validFormats ? '✅' : '❌'}`);
+        console.log(`- Data Type Consistency: ${result.dataQuality.dataTypeConsistency ? '✅' : '❌'}`);
+        console.log(`- Required Fields: ${result.dataQuality.requiredFields ? '✅' : '❌'}`);
         
-        csvRecords.forEach((record, index) => {
-            const internalLFs = (record.match(/\n/g) || []).length;
-            totalInMessageLFs += internalLFs;
-            
-            if (index === 0) {
-                headerRecords++;
-            } else if (record.trim() === '') {
-                emptyRecords++;
-            } else if (record.includes('Text STOP') || record.includes('Make a payment') || record.includes('Pay ')) {
-                fragmentRecords++;
-            } else if (record.split(',').length >= 8) {
-                dataRecords++;
-            } else {
-                otherRecords++;
-            }
-        });
-        
-        console.log('┌──────────────────────────────────────────────────────────────────────┐');
-        console.log('│                        CSV RECORD BREAKDOWN                          │');
-        console.log('├──────────────────────────────────────────────────────────────────────┤');
-        console.log(`│ Total CSV Records:      ${csvRecords.length.toLocaleString().padStart(10)}                                    │`);
-        console.log(`│ Header Records:         ${headerRecords.toLocaleString().padStart(10)} (${((headerRecords/csvRecords.length)*100).toFixed(1).padStart(5)}%)                    │`);
-        console.log(`│ Data Records:           ${dataRecords.toLocaleString().padStart(10)} (${((dataRecords/csvRecords.length)*100).toFixed(1).padStart(5)}%)                    │`);
-        console.log(`│ Message Fragments:      ${fragmentRecords.toLocaleString().padStart(10)} (${((fragmentRecords/csvRecords.length)*100).toFixed(1).padStart(5)}%)                    │`);
-        console.log(`│ Empty Records:          ${emptyRecords.toLocaleString().padStart(10)} (${((emptyRecords/csvRecords.length)*100).toFixed(1).padStart(5)}%)                    │`);
-        console.log(`│ Other Records:          ${otherRecords.toLocaleString().padStart(10)} (${((otherRecords/csvRecords.length)*100).toFixed(1).padStart(5)}%)                    │`);
-        console.log('├──────────────────────────────────────────────────────────────────────┤');
-        console.log(`│ Total In-Message LFs:   ${totalInMessageLFs.toLocaleString().padStart(10)} (legitimate formatting)           │`);
-        console.log(`│ Record Separation:      CR+LF (100% compliant)              │`);
-        console.log('└──────────────────────────────────────────────────────────────────────┘');
-
-        console.log(`\n📈 VALIDATION RESULTS SUMMARY:`);
-        console.log(`┌─────────────────────────────────────────┐`);
-        console.log(`│              COMPLIANCE STATUS          │`);
-        console.log(`├─────────────────────────────────────────┤`);
-        console.log(`│ Line Endings (CR+LF): ${validationResult.formatCompliance.lineEndings ? '✅ PASS' : '❌ FAIL'}    │`);
-        console.log(`│ File Name Pattern:    ${validationResult.formatCompliance.nameConvention ? '✅ PASS' : '❌ FAIL'}    │`);
-        console.log(`│ File Structure:       ${validationResult.formatCompliance.fileStructure ? '✅ PASS' : '❌ FAIL'}    │`);
-        console.log(`│ Headers Valid:        ${validationResult.formatCompliance.headers ? '✅ PASS' : '❌ FAIL'}    │`);
-        console.log(`├─────────────────────────────────────────┤`);
-        console.log(`│ No Null Values:       ${validationResult.dataQuality.noNullValues ? '✅ PASS' : '❌ FAIL'}    │`);
-        console.log(`│ Valid Formats:        ${validationResult.dataQuality.validFormats ? '✅ PASS' : '❌ FAIL'}    │`);
-        console.log(`│ Data Consistency:     ${validationResult.dataQuality.dataTypeConsistency ? '✅ PASS' : '❌ FAIL'}    │`);
-        console.log(`│ Required Fields:      ${validationResult.dataQuality.requiredFields ? '✅ PASS' : '❌ FAIL'}    │`);
-        console.log(`└─────────────────────────────────────────┘`);
-
-        // Categorize and count errors
-        const errorCategories = {
-            lineEndings: validationResult.errors.filter(e => e.includes('CR+LF')).length,
-            missingHeaders: validationResult.errors.filter(e => e.includes('Missing required header')).length,
-            headerMapping: validationResult.errors.filter(e => e.includes('Header mapping')).length,
-            nullValues: validationResult.errors.filter(e => e.includes('Null/empty values')).length,
-            invalidFormats: validationResult.errors.filter(e => e.includes('Invalid') && e.includes('format')).length,
-            missingFields: validationResult.errors.filter(e => e.includes('Required field') && e.includes('missing')).length,
-            other: validationResult.errors.filter(e => 
-                !e.includes('CR+LF') && 
-                !e.includes('Missing required header') && 
-                !e.includes('Header mapping') && 
-                !e.includes('Null/empty values') && 
-                !(e.includes('Invalid') && e.includes('format')) &&
-                !(e.includes('Required field') && e.includes('missing'))
-            ).length
-        };
-
-        console.log(`\n📊 ERROR BREAKDOWN:`);
-        console.log(`┌─────────────────────────────────────────┐`);
-        console.log(`│              ERROR STATISTICS           │`);
-        console.log(`├─────────────────────────────────────────┤`);
-        console.log(`│ Total Issues Found: ${validationResult.errors.length.toLocaleString().padStart(13)} │`);
-        console.log(`├─────────────────────────────────────────┤`);
-        console.log(`│ Line Ending Issues:    ${errorCategories.lineEndings.toLocaleString().padStart(10)} │`);
-        console.log(`│ Missing Headers:       ${errorCategories.missingHeaders.toLocaleString().padStart(10)} │`);
-        console.log(`│ Header Mapping:        ${errorCategories.headerMapping.toLocaleString().padStart(10)} │`);
-        console.log(`│ Null/Empty Values:     ${errorCategories.nullValues.toLocaleString().padStart(10)} │`);
-        console.log(`│ Invalid Formats:       ${errorCategories.invalidFormats.toLocaleString().padStart(10)} │`);
-        console.log(`│ Missing Fields:        ${errorCategories.missingFields.toLocaleString().padStart(10)} │`);
-        console.log(`│ Other Issues:          ${errorCategories.other.toLocaleString().padStart(10)} │`);
-        console.log(`└─────────────────────────────────────────┘`);
-
-        // Show critical issues first
-        console.log(`\n🚨 CRITICAL ISSUES (Top 10):`);
-        const criticalIssues = validationResult.errors.filter(e => 
-            e.includes('Missing required header') || 
-            e.includes('Header mapping') ||
-            e.includes('extension') ||
-            e.includes('blank row')
-        );
-        criticalIssues.slice(0, 10).forEach((error, index) => {
-            console.log(`${index + 1}. ${error}`);
-        });
-
-        // Show data quality issues
-        if (errorCategories.nullValues > 0 || errorCategories.invalidFormats > 0 || errorCategories.missingFields > 0) {
-            console.log(`\n⚠️  DATA QUALITY ISSUES (Top 10):`);
-            const dataIssues = validationResult.errors.filter(e => 
-                e.includes('Null/empty values') || 
-                (e.includes('Invalid') && e.includes('format')) ||
-                (e.includes('Required field') && e.includes('missing'))
-            );
-            dataIssues.slice(0, 10).forEach((error, index) => {
-                console.log(`${index + 1}. ${error}`);
-            });
+        if (result.errors.length > 0) {
+            console.log('\n❌ Errors:');
+            result.errors.forEach(error => console.log(`- ${error}`));
+        } else {
+            console.log('\n✅ No errors found');
         }
-
-        // Performance metrics
-        const lineEndingErrorRate = (errorCategories.lineEndings / lines.length * 100);
-        const dataQualityErrorRate = ((errorCategories.nullValues + errorCategories.invalidFormats + errorCategories.missingFields) / 100 * 100);
-
-        console.log(`\n📈 QUALITY METRICS:`);
-        console.log(`┌─────────────────────────────────────────┐`);
-        console.log(`│            QUALITY ASSESSMENT           │`);
-        console.log(`├─────────────────────────────────────────┤`);
-        console.log(`│ Line Ending Error Rate: ${lineEndingErrorRate.toFixed(1).padStart(9)}% │`);
-        console.log(`│ Data Quality Error Rate: ${dataQualityErrorRate.toFixed(1).padStart(8)}% │`);
-        console.log(`│ Header Compliance:       ${validationResult.formatCompliance.headers ? 'PASS' : 'FAIL'.padStart(8)} │`);
-        console.log(`│ Overall File Health:     ${validationResult.errors.length === 0 ? 'EXCELLENT' : validationResult.errors.length < 100 ? 'GOOD' : validationResult.errors.length < 1000 ? 'POOR' : 'CRITICAL'.padStart(8)} │`);
-        console.log(`└─────────────────────────────────────────┘`);
-
-        // Recommendations
-        console.log(`\n💡 RECOMMENDATIONS:`);
-        if (errorCategories.lineEndings > 0) {
-            console.log(`🔧 NOTICE: Line ending validation updated - CR+LF record separation with LF in-message formatting is correct`);
-        }
-        if (errorCategories.missingHeaders > 0) {
-            console.log(`🔧 Add missing required headers`);
-        }
-        if (errorCategories.headerMapping > 0) {
-            console.log(`🔧 Standardize header naming convention`);
-        }
-        if (errorCategories.invalidFormats > 0) {
-            console.log(`🔧 Implement field format validation (phone numbers, dates)`);
-        }
-        if (errorCategories.nullValues > 0 || errorCategories.missingFields > 0) {
-            console.log(`🔧 Add data completeness checks`);
-        }
-        if (validationResult.errors.length === 0) {
-            console.log(`✅ File format is compliant - no changes needed!`);
-        }
-
-        console.log(`\n✅ ANALYSIS COMPLETE!`);
-        console.log(`📄 Report generated for: ${latestFile.key}`);
-        console.log(`🕐 Analysis time: ${new Date().toISOString()}`);
 
     } catch (error) {
-        console.error('❌ Error during validation:', error);
-        process.exit(1);
+        console.error('Error during validation:', error);
     }
 }
+
+// Helper function to convert stream to string
+async function streamToString(stream: Readable): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+        stream.on('error', (err) => reject(err));
+        stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+    });
+}
+
+// Run the validation
+console.log('Script started');
+testLastWeekOutreachLogs().catch(console.error);
 
 // Export the function for manual testing
 export { testLastWeekOutreachLogs }; 
